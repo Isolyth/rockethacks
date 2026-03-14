@@ -1,0 +1,213 @@
+<script lang="ts">
+	import type { AgentQuestion } from '$lib/types';
+
+	let {
+		question,
+		onAnswer
+	}: {
+		question: AgentQuestion;
+		onAnswer: (answer: string) => void;
+	} = $props();
+
+	let selected = $state<string | null>(null);
+	let customText = $state('');
+	let useCustom = $state(false);
+</script>
+
+<div class="question-card">
+	<div class="question-header">
+		<div class="question-icon">?</div>
+		<h3 class="question-title">The agent has a question</h3>
+	</div>
+
+	<p class="question-text">{question.question}</p>
+
+	<div class="options">
+		{#each question.options as option}
+			<label class="option" class:selected={!useCustom && selected === option}>
+				<input
+					type="radio"
+					name="agent-question"
+					value={option}
+					checked={!useCustom && selected === option}
+					onchange={() => {
+						selected = option;
+						useCustom = false;
+					}}
+				/>
+				<span class="option-text">{option}</span>
+			</label>
+		{/each}
+
+		<label class="option" class:selected={useCustom}>
+			<input
+				type="radio"
+				name="agent-question"
+				value="__custom__"
+				checked={useCustom}
+				onchange={() => {
+					useCustom = true;
+					selected = null;
+				}}
+			/>
+			<span class="option-text">Other</span>
+		</label>
+	</div>
+
+	{#if useCustom}
+		<input
+			type="text"
+			class="custom-input"
+			placeholder="Type your answer..."
+			bind:value={customText}
+			onkeydown={(e) => {
+				if (e.key === 'Enter' && customText.trim()) onAnswer(customText.trim());
+			}}
+		/>
+	{/if}
+
+	<div class="actions">
+		<button
+			class="submit-btn"
+			disabled={useCustom ? !customText.trim() : !selected}
+			onclick={() => {
+				const answer = useCustom ? customText.trim() : selected;
+				if (answer) onAnswer(answer);
+			}}
+			type="button"
+		>
+			Submit answer
+		</button>
+	</div>
+</div>
+
+<style>
+	.question-card {
+		width: 100%;
+		max-width: 560px;
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
+		padding: 1.75rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-primary);
+		border-radius: var(--radius);
+	}
+
+	.question-header {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.question-icon {
+		width: 36px;
+		height: 36px;
+		border-radius: 50%;
+		background: var(--color-primary);
+		color: white;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 1.25rem;
+		font-weight: 700;
+		flex-shrink: 0;
+	}
+
+	.question-title {
+		font-size: 1.05rem;
+		font-weight: 600;
+		color: var(--color-text);
+		margin: 0;
+	}
+
+	.question-text {
+		font-size: 0.95rem;
+		color: var(--color-text);
+		line-height: 1.5;
+		margin: 0;
+	}
+
+	.options {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.option {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.75rem 1rem;
+		background: var(--color-surface-2);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.option:hover {
+		border-color: var(--color-primary);
+	}
+
+	.option.selected {
+		border-color: var(--color-primary);
+		background: rgba(99, 102, 241, 0.1);
+	}
+
+	.option input[type='radio'] {
+		accent-color: var(--color-primary);
+		width: 16px;
+		height: 16px;
+		flex-shrink: 0;
+	}
+
+	.option-text {
+		font-size: 0.9rem;
+		color: var(--color-text);
+	}
+
+	.custom-input {
+		padding: 0.75rem 1rem;
+		background: var(--color-surface-2);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		color: var(--color-text);
+		font-size: 0.9rem;
+		outline: none;
+		transition: border-color 0.15s;
+	}
+
+	.custom-input:focus {
+		border-color: var(--color-primary);
+	}
+
+	.custom-input::placeholder {
+		color: var(--color-text-muted);
+	}
+
+	.actions {
+		display: flex;
+		justify-content: flex-end;
+	}
+
+	.submit-btn {
+		padding: 0.625rem 1.25rem;
+		background: var(--color-primary);
+		color: white;
+		border: none;
+		border-radius: var(--radius-sm);
+		font-size: 0.875rem;
+		font-weight: 600;
+		transition: all 0.2s;
+	}
+
+	.submit-btn:hover:not(:disabled) {
+		background: var(--color-primary-light);
+	}
+
+	.submit-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+</style>

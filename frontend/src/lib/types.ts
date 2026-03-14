@@ -1,5 +1,5 @@
 export interface ProgressEvent {
-	step: 'parsing' | 'analyzing' | 'generating';
+	step: 'parsing' | 'analyzing' | 'generating' | 'narrating';
 	message: string;
 	percent: number;
 }
@@ -43,9 +43,32 @@ export interface AnalysisResult {
 	podcast_script: string;
 }
 
+export interface PodcastSentence {
+	text: string;
+	start: number;
+	end: number;
+}
+
+export interface PodcastAudio {
+	podcast_script: string;
+	audio_base64: string | null;
+	sentences: PodcastSentence[];
+}
+
 export interface DocumentRequest {
 	document_type: string;
 	reason: string;
 }
 
-export type AppState = 'idle' | 'processing' | 'awaiting_documents' | 'done' | 'error';
+export interface AgentQuestion {
+	question: string;
+	options: string[];
+}
+
+export type AppState =
+	| 'idle'
+	| 'processing'
+	| 'awaiting_documents'
+	| 'awaiting_answer'
+	| 'done'
+	| 'error';

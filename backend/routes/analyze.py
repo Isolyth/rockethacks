@@ -8,6 +8,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from services.parser import parse_pdf, parse_csv
 from services.gemini import analyze_with_gemini_agent, generate_podcast_script
+from services.elevenlabs_tts import generate_podcast_audio
 from services.session import Session, sessions
 from models.schemas import FinancialReport
 
@@ -99,7 +100,13 @@ async def ws_analyze(ws: WebSocket):
         async for event_type, event_data in analyze_with_gemini_agent(
             all_text, file_count=len(files), session=session
         ):
-            if event_type == "request_documents":
+            if event_type == "thinking":
+                await send_json(ws, {
+                    "type": "thinking",
+                    "text": event_data,
+                })
+
+            elif event_type == "request_documents":
                 logger.info(f"  Agent requesting: {event_data['document_type']}")
                 await send_json(ws, {
                     "type": "request_documents",
@@ -112,7 +119,6 @@ async def ws_analyze(ws: WebSocket):
                 resp_msg = json.loads(raw_resp)
 
                 if resp_msg.get("type") == "upload_files" and resp_msg.get("files"):
-                    # Parse the new files
                     new_text = ""
                     for f in resp_msg["files"]:
                         name = f["name"]
@@ -124,11 +130,31 @@ async def ws_analyze(ws: WebSocket):
 
                     session.user_response = {"action": "upload", "document_text": new_text}
                 else:
-                    # skip
                     logger.info("  User skipped document request")
                     session.user_response = {"action": "skip"}
 
-                session.event.set()
+                await send_json(ws, {
+                    "type": "progress",
+                    "step": "analyzing",
+                    "message": "Continuing analysis...",
+                    "percent": 55,
+                })
+
+            elif event_type == "ask_question":
+                logger.info(f"  Agent asking: {event_data['question']}")
+                await send_json(ws, {
+                    "type": "ask_question",
+                    "question": event_data["question"],
+                    "options": event_data["options"],
+                })
+
+                # Wait for client answer
+                raw_resp = await ws.receive_text()
+                resp_msg = json.loads(raw_resp)
+
+                answer = resp_msg.get("answer", "No answer provided")
+                logger.info(f"  User answered: {answer}")
+                session.user_response = {"answer": answer}
 
                 await send_json(ws, {
                     "type": "progress",
@@ -139,7 +165,7 @@ async def ws_analyze(ws: WebSocket):
 
             elif event_type == "result":
                 report_data = event_data
-                logger.info(f"[2/4] Gemini analysis done ({time.time() - t1:.1f}s)")
+                logger.info(f"[2/5] Gemini analysis done ({time.time() - t1:.1f}s)")
 
             elif event_type == "error":
                 await send_json(ws, {"type": "error", "message": event_data})
@@ -157,36 +183,80 @@ async def ws_analyze(ws: WebSocket):
             "type": "progress",
             "step": "analyzing",
             "message": "Financial report generated",
-            "percent": 60,
+            "percent": 50,
+        })
+
+        # Send report immediately so frontend can display it
+        logger.info("[2/5] Sending report to client")
+        await send_json(ws, {
+            "type": "report_ready",
+            "report": report.model_dump(),
         })
 
         # Step 3: Podcast script
-        logger.info("[3/4] Generating podcast script...")
+        logger.info("[3/5] Generating podcast script...")
         await send_json(ws, {
             "type": "progress",
             "step": "generating",
             "message": "Creating your podcast script...",
-            "percent": 75,
+            "percent": 60,
         })
 
         t2 = time.time()
         podcast_script = await generate_podcast_script(report_data)
-        logger.info(f"[3/4] Podcast script done ({time.time() - t2:.1f}s, {len(podcast_script)} chars)")
+        logger.info(f"[3/5] Podcast script done ({time.time() - t2:.1f}s, {len(podcast_script)} chars)")
 
         await send_json(ws, {
             "type": "progress",
             "step": "generating",
             "message": "Podcast script complete!",
-            "percent": 95,
+            "percent": 70,
         })
 
-        # Step 4: Send result
-        logger.info(f"[4/4] Sending result. Total time: {time.time() - t0:.1f}s")
+        # Step 4: Generate TTS audio with ElevenLabs
+        logger.info("[4/5] Generating podcast audio...")
         await send_json(ws, {
-            "type": "result",
-            "report": report.model_dump(),
-            "podcast_script": podcast_script,
+            "type": "progress",
+            "step": "narrating",
+            "message": "Generating audio narration...",
+            "percent": 80,
         })
+
+        t3 = time.time()
+        try:
+            audio_result = await generate_podcast_audio(podcast_script)
+            logger.info(f"[4/5] Audio done ({time.time() - t3:.1f}s, {len(audio_result['sentences'])} sentences)")
+
+            await send_json(ws, {
+                "type": "progress",
+                "step": "narrating",
+                "message": "Audio narration complete!",
+                "percent": 95,
+            })
+
+            # Step 5: Send podcast audio
+            logger.info(f"[5/5] Sending result. Total time: {time.time() - t0:.1f}s")
+            await send_json(ws, {
+                "type": "podcast_audio_ready",
+                "podcast_script": podcast_script,
+                "audio_base64": audio_result["audio_base64"],
+                "sentences": audio_result["sentences"],
+            })
+        except Exception as e:
+            logger.error(f"[4/5] ElevenLabs TTS failed: {e}", exc_info=True)
+            await send_json(ws, {
+                "type": "progress",
+                "step": "narrating",
+                "message": "Audio generation failed — showing script only",
+                "percent": 95,
+            })
+            # Fallback: send script without audio
+            await send_json(ws, {
+                "type": "podcast_audio_ready",
+                "podcast_script": podcast_script,
+                "audio_base64": None,
+                "sentences": [],
+            })
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected (session {session_id})")

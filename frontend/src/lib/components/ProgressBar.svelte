@@ -3,8 +3,13 @@
 
 	let { progress }: { progress: ProgressEvent } = $props();
 
-	const steps = ['parsing', 'analyzing', 'generating'] as const;
-	const stepLabels = { parsing: 'Parsing', analyzing: 'Analyzing', generating: 'Generating' };
+	const steps = ['parsing', 'analyzing', 'generating', 'narrating'] as const;
+	const stepLabels = {
+		parsing: 'Parsing',
+		analyzing: 'Analyzing',
+		generating: 'Generating',
+		narrating: 'Narrating'
+	};
 
 	function stepIndex(step: string): number {
 		return steps.indexOf(step as (typeof steps)[number]);

@@ -1,7 +1,14 @@
-import type { ProgressEvent, AnalysisResult, DocumentRequest } from './types';
+import type {
+	ProgressEvent,
+	FinancialReport,
+	PodcastAudio,
+	DocumentRequest,
+	AgentQuestion
+} from './types';
 
 export interface AnalysisHandle {
 	respond: (action: 'upload' | 'skip', files?: File[]) => Promise<void>;
+	answerQuestion: (answer: string) => void;
 	close: () => void;
 }
 
@@ -27,9 +34,12 @@ async function filesToPayload(files: File[]): Promise<{ name: string; content: s
 export function startAnalysis(
 	files: File[],
 	onProgress: (event: ProgressEvent) => void,
-	onResult: (result: AnalysisResult) => void,
+	onReportReady: (report: FinancialReport) => void,
+	onPodcastAudioReady: (audio: PodcastAudio) => void,
 	onError: (message: string) => void,
-	onDocumentRequest: (request: DocumentRequest) => void
+	onDocumentRequest: (request: DocumentRequest) => void,
+	onAskQuestion: (question: AgentQuestion) => void,
+	onThinking: (text: string) => void
 ): AnalysisHandle {
 	const ws = new WebSocket('ws://localhost:8000/ws/analyze');
 	let open = false;
@@ -56,11 +66,20 @@ export function startAnalysis(
 				case 'progress':
 					onProgress(data);
 					break;
+				case 'thinking':
+					onThinking(data.text);
+					break;
 				case 'request_documents':
 					onDocumentRequest(data);
 					break;
-				case 'result':
-					onResult(data);
+				case 'ask_question':
+					onAskQuestion(data);
+					break;
+				case 'report_ready':
+					onReportReady(data.report);
+					break;
+				case 'podcast_audio_ready':
+					onPodcastAudioReady(data);
 					break;
 				case 'error':
 					onError(data.message);
@@ -88,6 +107,10 @@ export function startAnalysis(
 			} else {
 				ws.send(JSON.stringify({ type: 'skip' }));
 			}
+		},
+		answerQuestion(answer: string) {
+			if (!open) return;
+			ws.send(JSON.stringify({ type: 'answer_question', answer }));
 		},
 		close() {
 			if (open) ws.close();

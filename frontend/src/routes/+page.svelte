@@ -2,30 +2,51 @@
 	import FileUpload from '$lib/components/FileUpload.svelte';
 	import ProgressBar from '$lib/components/ProgressBar.svelte';
 	import Report from '$lib/components/Report.svelte';
-	import PodcastScript from '$lib/components/PodcastScript.svelte';
+	import PodcastPlayer from '$lib/components/PodcastPlayer.svelte';
 	import DocumentRequestCard from '$lib/components/DocumentRequest.svelte';
+	import QuestionCard from '$lib/components/QuestionCard.svelte';
+	import ThinkingIndicator from '$lib/components/ThinkingIndicator.svelte';
 	import { startAnalysis, type AnalysisHandle } from '$lib/api';
-	import type { AppState, ProgressEvent, AnalysisResult, DocumentRequest } from '$lib/types';
+	import type {
+		AppState,
+		ProgressEvent,
+		FinancialReport,
+		PodcastAudio,
+		DocumentRequest,
+		AgentQuestion
+	} from '$lib/types';
 
 	let appState = $state<AppState>('idle');
 	let progress = $state<ProgressEvent>({ step: 'parsing', message: '', percent: 0 });
-	let result = $state<AnalysisResult | null>(null);
+	let report = $state<FinancialReport | null>(null);
+	let podcastAudio = $state<PodcastAudio | null>(null);
 	let errorMessage = $state('');
 	let documentRequest = $state<DocumentRequest | null>(null);
+	let agentQuestion = $state<AgentQuestion | null>(null);
+	let thinkingText = $state('');
 	let analysisHandle = $state<AnalysisHandle | null>(null);
+
+	// Whether we're still processing (report shown but podcast still generating)
+	let stillProcessing = $derived(appState === 'processing' && report !== null);
 
 	function handleUpload(files: File[]) {
 		appState = 'processing';
 		progress = { step: 'parsing', message: 'Uploading files...', percent: 5 };
 		errorMessage = '';
+		report = null;
+		podcastAudio = null;
 
 		analysisHandle = startAnalysis(
 			files,
 			(evt) => {
 				progress = evt;
+				thinkingText = '';
 			},
-			(res) => {
-				result = res;
+			(rpt) => {
+				report = rpt;
+			},
+			(audio) => {
+				podcastAudio = audio;
 				appState = 'done';
 				analysisHandle = null;
 			},
@@ -37,7 +58,17 @@
 			(req) => {
 				documentRequest = req;
 				appState = 'awaiting_documents';
+				thinkingText = '';
 				progress = { step: 'analyzing', message: 'Agent needs additional information', percent: 50 };
+			},
+			(q) => {
+				agentQuestion = q;
+				appState = 'awaiting_answer';
+				thinkingText = '';
+				progress = { step: 'analyzing', message: 'Agent has a question for you', percent: 50 };
+			},
+			(text) => {
+				thinkingText = text;
 			}
 		);
 	}
@@ -50,15 +81,26 @@
 		documentRequest = null;
 	}
 
+	function handleQuestionAnswer(answer: string) {
+		if (!analysisHandle) return;
+		analysisHandle.answerQuestion(answer);
+		appState = 'processing';
+		progress = { step: 'analyzing', message: 'Continuing analysis...', percent: 55 };
+		agentQuestion = null;
+	}
+
 	function reset() {
 		if (analysisHandle) {
 			analysisHandle.close();
 			analysisHandle = null;
 		}
 		appState = 'idle';
-		result = null;
+		report = null;
+		podcastAudio = null;
 		errorMessage = '';
 		documentRequest = null;
+		agentQuestion = null;
+		thinkingText = '';
 		progress = { step: 'parsing', message: '', percent: 0 };
 	}
 </script>
@@ -71,21 +113,47 @@
 	<div class="content">
 		{#if appState === 'idle'}
 			<FileUpload onupload={handleUpload} />
-		{:else if appState === 'processing'}
-			<ProgressBar {progress} />
 		{:else if appState === 'awaiting_documents' && documentRequest}
 			<ProgressBar {progress} />
 			<DocumentRequestCard request={documentRequest} onrespond={handleDocumentResponse} />
-		{:else if appState === 'done' && result}
-			<Report report={result.report} />
-			<PodcastScript script={result.podcast_script} />
-			<button class="reset-btn" onclick={reset} type="button">Analyze more statements</button>
+		{:else if appState === 'awaiting_answer' && agentQuestion}
+			<ProgressBar {progress} />
+			<QuestionCard question={agentQuestion} onAnswer={handleQuestionAnswer} />
 		{:else if appState === 'error'}
 			<div class="error-card">
 				<p class="error-icon">!</p>
 				<p class="error-message">{errorMessage}</p>
 				<button class="reset-btn" onclick={reset} type="button">Try again</button>
 			</div>
+		{:else}
+			<!-- Processing or done: show report and podcast progressively -->
+			{#if report}
+				<Report {report} />
+			{/if}
+
+			{#if stillProcessing}
+				<ProgressBar {progress} />
+			{/if}
+
+			{#if podcastAudio}
+				<PodcastPlayer
+					podcastScript={podcastAudio.podcast_script}
+					audioBase64={podcastAudio.audio_base64}
+					sentences={podcastAudio.sentences}
+				/>
+			{/if}
+
+			{#if !report && appState === 'processing'}
+				<!-- No report yet, just show progress -->
+				<ProgressBar {progress} />
+				{#if thinkingText}
+					<ThinkingIndicator text={thinkingText} />
+				{/if}
+			{/if}
+
+			{#if appState === 'done'}
+				<button class="reset-btn" onclick={reset} type="button">Analyze more statements</button>
+			{/if}
 		{/if}
 	</div>
 </main>
