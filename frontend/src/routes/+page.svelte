@@ -126,33 +126,36 @@
 				<button class="reset-btn" onclick={reset} type="button">Try again</button>
 			</div>
 		{:else}
-			<!-- Processing or done: show report and podcast progressively -->
 			{#if report}
-				<Report {report} />
-			{/if}
+				<!-- Two-column results layout -->
+				<div class="results-grid">
+					<div class="results-col results-col--left">
+						<Report {report} />
+					</div>
+					<div class="results-col results-col--right">
+						{#if stillProcessing}
+							<ProgressBar {progress} />
+							<p class="generating-hint">Generating your podcast...</p>
+						{/if}
+						{#if podcastAudio}
+							<PodcastPlayer
+								podcastScript={podcastAudio.podcast_script}
+								audioBase64={podcastAudio.audio_base64}
+								sentences={podcastAudio.sentences}
+							/>
+						{/if}
+					</div>
+				</div>
 
-			{#if stillProcessing}
+				{#if appState === 'done'}
+					<button class="reset-btn" onclick={reset} type="button">Analyze more statements</button>
+				{/if}
+			{:else if appState === 'processing'}
+				<!-- No report yet: centered progress -->
 				<ProgressBar {progress} />
-			{/if}
-
-			{#if podcastAudio}
-				<PodcastPlayer
-					podcastScript={podcastAudio.podcast_script}
-					audioBase64={podcastAudio.audio_base64}
-					sentences={podcastAudio.sentences}
-				/>
-			{/if}
-
-			{#if !report && appState === 'processing'}
-				<!-- No report yet, just show progress -->
-				<ProgressBar {progress} />
-				{#if thinkingText}
+				{#if progress.step === 'analyzing'}
 					<ThinkingIndicator text={thinkingText} />
 				{/if}
-			{/if}
-
-			{#if appState === 'done'}
-				<button class="reset-btn" onclick={reset} type="button">Analyze more statements</button>
 			{/if}
 		{/if}
 	</div>
@@ -219,5 +222,41 @@
 	.reset-btn:hover {
 		border-color: var(--color-primary);
 		background: var(--color-surface);
+	}
+
+	.results-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 2.5rem;
+		width: 100%;
+		max-width: 1400px;
+		align-items: start;
+	}
+
+	.results-col {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+		min-width: 0;
+	}
+
+	.generating-hint {
+		text-align: center;
+		color: var(--color-text-muted);
+		font-size: 0.9rem;
+		padding: 2rem 1rem;
+		background: var(--color-surface);
+		border: 1px dashed var(--color-border);
+		border-radius: var(--radius);
+	}
+
+	.results-col--right :global(.progress-container) {
+		max-width: none;
+	}
+
+	@media (max-width: 768px) {
+		.results-grid {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>

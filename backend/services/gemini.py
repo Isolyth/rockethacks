@@ -73,9 +73,12 @@ When calling finish, provide a report object with this exact structure:
 Categories should include things like: Food & Dining, Transportation, Shopping, Entertainment, Bills & Utilities, Healthcare, Subscriptions, Transfers, Income, etc.
 
 ## Guidelines
-- Before finishing, consider: could I produce a significantly better report with more data or context? If yes, ask for it!
-- Use ask_question to clarify anything ambiguous in the data — don't guess when you can ask.
-- You may make at most $max_requests total requests (document requests + questions combined).
+- You MUST call ask_question or request_documents at least TWICE before calling finish. Never go straight to finish.
+- On your FIRST turn, always ask a question to understand the user's goals or clarify something about the data.
+- On your SECOND turn, either ask another question or request a missing document.
+- Only call finish after you've gathered enough context through questions/documents.
+- Use ask_question liberally — it's cheap and makes the report much better. Ask about goals, clarify ambiguous merchants, confirm income sources, etc.
+- You may make at most $max_requests total interactions (document requests + questions combined).
 - If the user declines or skips, proceed with what you have.
 - Incorporate user answers into your insights and recommendations.
 

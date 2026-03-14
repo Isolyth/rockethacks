@@ -166,7 +166,6 @@
 <style>
 	.podcast-player {
 		width: 100%;
-		max-width: 700px;
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
