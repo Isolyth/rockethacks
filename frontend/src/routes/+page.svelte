@@ -30,7 +30,7 @@
 	// Whether we're still processing (report shown but podcast still generating)
 	let stillProcessing = $derived(appState === 'processing' && report !== null);
 
-	function handleUpload(files: File[]) {
+	function handleUpload(files: File[], language: string) {
 		appState = 'processing';
 		progress = { step: 'parsing', message: 'Uploading files...', percent: 5 };
 		errorMessage = '';
@@ -39,6 +39,7 @@
 
 		analysisHandle = startAnalysis(
 			files,
+			language,
 			(evt) => {
 				progress = evt;
 				thinkingText = '';
