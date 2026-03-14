@@ -43,7 +43,13 @@
 			</label>
 			<label>
 				<span>Password</span>
-				<input type="password" bind:value={password} required minlength="6" placeholder="Min 6 characters" />
+				<input type="password" bind:value={password} required minlength="8" placeholder="Enter password" />
+				<ul class="password-requirements">
+					<li class:met={password.length >= 8}>At least 8 characters</li>
+					<li class:met={/[A-Z]/.test(password) && /[a-z]/.test(password)}>At least 1 uppercase & 1 lowercase letter</li>
+					<li class:met={/[0-9]/.test(password)}>At least 1 number</li>
+					<li class:met={/[^A-Za-z0-9]/.test(password)}>At least 1 special character</li>
+				</ul>
 			</label>
 			{#if error}
 				<p class="error">{error}</p>
@@ -153,5 +159,21 @@
 
 	.switch a:hover {
 		text-decoration: underline;
+	}
+
+	.password-requirements {
+		margin: 0.25rem 0 0;
+		padding-left: 1.25rem;
+		font-size: 0.75rem;
+		color: var(--color-text-muted);
+	}
+
+	.password-requirements li {
+		margin-bottom: 0.25rem;
+		transition: color 0.2s;
+	}
+
+	.password-requirements li.met {
+		color: var(--color-success, #10b981);
 	}
 </style>
