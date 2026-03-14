@@ -28,6 +28,7 @@ AWS_S3_BUCKET = os.getenv("AWS_S3_BUCKET", "monai-uploads")
 # Cognito
 COGNITO_USER_POOL_ID = os.getenv("COGNITO_USER_POOL_ID")
 COGNITO_CLIENT_ID = os.getenv("COGNITO_CLIENT_ID")
+COGNITO_CLIENT_SECRET = os.getenv("COGNITO_CLIENT_SECRET")
 
 # DynamoDB
 DYNAMO_REPORTS_TABLE = os.getenv("DYNAMO_REPORTS_TABLE", "monai-reports")

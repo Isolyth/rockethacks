@@ -1,6 +1,9 @@
 """Authentication via Amazon Cognito."""
 
 import asyncio
+import base64
+import hashlib
+import hmac
 import logging
 
 import boto3
@@ -11,6 +14,7 @@ from config import (
     AWS_REGION,
     COGNITO_USER_POOL_ID,
     COGNITO_CLIENT_ID,
+    COGNITO_CLIENT_SECRET,
 )
 
 logger = logging.getLogger("uvicorn.error")
@@ -30,6 +34,17 @@ def _get_cognito():
     return _cognito_client
 
 
+def _compute_secret_hash(username: str) -> str:
+    """Compute the SECRET_HASH required when the app client has a secret."""
+    msg = username + COGNITO_CLIENT_ID
+    dig = hmac.new(
+        COGNITO_CLIENT_SECRET.encode("utf-8"),
+        msg.encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+    return base64.b64encode(dig).decode("utf-8")
+
+
 def _extract_user_attrs(attrs: list[dict]) -> dict:
     """Convert Cognito user attributes list to a flat dict."""
     out = {}
@@ -45,17 +60,17 @@ async def cognito_signup(email: str, password: str, display_name: str) -> dict:
         raise RuntimeError("Cognito not configured")
 
     email_lower = email.lower()
-    name = display_name or email_lower.split("@")[0]
+    secret_hash = _compute_secret_hash(email_lower)
 
     # Create user
     await asyncio.to_thread(
         client.sign_up,
         ClientId=COGNITO_CLIENT_ID,
+        SecretHash=secret_hash,
         Username=email_lower,
         Password=password,
         UserAttributes=[
             {"Name": "email", "Value": email_lower},
-            {"Name": "custom:display_name", "Value": name},
         ],
     )
 
@@ -72,7 +87,11 @@ async def cognito_signup(email: str, password: str, display_name: str) -> dict:
         UserPoolId=COGNITO_USER_POOL_ID,
         ClientId=COGNITO_CLIENT_ID,
         AuthFlow="ADMIN_USER_PASSWORD_AUTH",
-        AuthParameters={"USERNAME": email_lower, "PASSWORD": password},
+        AuthParameters={
+            "USERNAME": email_lower,
+            "PASSWORD": password,
+            "SECRET_HASH": secret_hash,
+        },
     )
 
     tokens = auth_result["AuthenticationResult"]
@@ -90,12 +109,19 @@ async def cognito_login(email: str, password: str) -> dict:
     if client is None:
         raise RuntimeError("Cognito not configured")
 
+    email_lower = email.lower()
+    secret_hash = _compute_secret_hash(email_lower)
+
     auth_result = await asyncio.to_thread(
         client.admin_initiate_auth,
         UserPoolId=COGNITO_USER_POOL_ID,
         ClientId=COGNITO_CLIENT_ID,
         AuthFlow="ADMIN_USER_PASSWORD_AUTH",
-        AuthParameters={"USERNAME": email.lower(), "PASSWORD": password},
+        AuthParameters={
+            "USERNAME": email_lower,
+            "PASSWORD": password,
+            "SECRET_HASH": secret_hash,
+        },
     )
 
     tokens = auth_result["AuthenticationResult"]
@@ -125,5 +151,5 @@ async def get_user_from_token(access_token: str) -> dict | None:
     return {
         "id": attrs.get("sub", ""),
         "email": attrs.get("email", resp.get("Username", "")),
-        "display_name": attrs.get("custom:display_name", attrs.get("email", "").split("@")[0]),
+        "display_name": attrs.get("email", resp.get("Username", "")).split("@")[0],
     }
