@@ -196,18 +196,18 @@
 
 	.primary-btn {
 		padding: 0.625rem 1.25rem;
-		background: var(--color-primary);
-		color: white;
+		background: var(--color-accent);
+		color: #0a0a0f;
 		border: none;
 		border-radius: var(--radius-sm);
 		font-size: 0.9rem;
 		font-weight: 600;
 		cursor: pointer;
-		transition: opacity 0.2s;
+		transition: background 0.2s;
 	}
 
 	.primary-btn:hover {
-		opacity: 0.9;
+		background: var(--color-accent-light);
 	}
 
 	.tabs {
@@ -230,7 +230,7 @@
 
 	.tab.active {
 		color: var(--color-text);
-		border-bottom-color: var(--color-primary);
+		border-bottom-color: var(--color-accent);
 	}
 
 	.tab:hover:not(.active) {
@@ -359,7 +359,7 @@
 	}
 
 	.view-btn:hover {
-		border-color: var(--color-primary);
+		border-color: var(--color-accent);
 	}
 
 	.delete-btn {

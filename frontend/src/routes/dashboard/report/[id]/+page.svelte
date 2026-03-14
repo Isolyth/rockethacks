@@ -187,7 +187,7 @@
 	}
 
 	.action-btn:hover {
-		border-color: var(--color-primary);
+		border-color: var(--color-accent);
 	}
 
 	@media (max-width: 768px) {

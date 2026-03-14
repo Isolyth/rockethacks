@@ -70,7 +70,7 @@
 		width: 8px;
 		height: 8px;
 		border-radius: 50%;
-		background: var(--color-primary);
+		background: var(--color-accent);
 		animation: pulse 1.5s ease-in-out infinite;
 	}
 

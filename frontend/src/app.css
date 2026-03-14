@@ -2,14 +2,18 @@
 	--color-bg: #0a0a0f;
 	--color-surface: rgba(20, 20, 32, 0.6);
 	--color-surface-2: rgba(28, 28, 46, 0.6);
-	--color-primary: #6366f1;
-	--color-primary-light: #818cf8;
+	--color-primary: #C0C6CC;
+	--color-primary-light: #DDE6EA;
+	--color-accent: #D5A629;
+	--color-accent-light: #F6E27A;
 	--color-text: #e2e8f0;
 	--color-text-muted: #94a3b8;
 	--color-success: #22c55e;
 	--color-danger: #ef4444;
 	--color-warning: #f59e0b;
 	--color-border: #2a2a3e;
+	--gradient-silver: linear-gradient(180deg, #BAC0C5 0%, #F1F9FE 25%, #656A70 52%, #DDE6EA 77%, #43474D 100%);
+	--gradient-gold: linear-gradient(180deg, #F6E27A 0%, #D5A629 37.5%, #F6D767 75%, #B9822C 100%);
 	--radius: 12px;
 	--radius-sm: 8px;
 }
@@ -36,18 +40,6 @@ body {
 	position: relative;
 }
 
-body::before {
-	content: '';
-	position: fixed;
-	top: -50%;
-	left: -50%;
-	width: 200%;
-	height: 200%;
-	background: radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.1) 0%, transparent 50%);
-	pointer-events: none;
-	z-index: -1;
-}
-
 h1,
 h2,
 h3 {
@@ -55,7 +47,7 @@ h3 {
 }
 
 a {
-	color: var(--color-primary-light);
+	color: var(--color-accent);
 }
 
 button {

@@ -249,7 +249,7 @@
 
 	.sentence.active {
 		color: #fff;
-		background: rgba(99, 102, 241, 0.25);
+		background: rgba(213, 166, 41, 0.15);
 	}
 
 	.sentence.past {
@@ -272,8 +272,8 @@
 		height: 40px;
 		border-radius: 50%;
 		border: none;
-		background: var(--color-primary);
-		color: white;
+		background: var(--color-accent);
+		color: #0a0a0f;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -282,7 +282,7 @@
 	}
 
 	.play-btn:hover {
-		background: var(--color-primary-light);
+		background: var(--color-accent-light);
 	}
 
 	.time {
@@ -307,7 +307,7 @@
 		width: 12px;
 		height: 12px;
 		border-radius: 50%;
-		background: var(--color-primary);
+		background: var(--color-accent);
 		cursor: pointer;
 	}
 
@@ -315,7 +315,7 @@
 		width: 12px;
 		height: 12px;
 		border-radius: 50%;
-		background: var(--color-primary);
+		background: var(--color-accent);
 		cursor: pointer;
 		border: none;
 	}
@@ -336,8 +336,8 @@
 	}
 
 	.download-btn:hover {
-		color: var(--color-primary);
-		border-color: var(--color-primary);
+		color: var(--color-accent);
+		border-color: var(--color-accent);
 	}
 
 	.no-audio {

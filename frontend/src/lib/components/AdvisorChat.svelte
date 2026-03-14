@@ -181,8 +181,8 @@
 
 	.chat-bubble.user {
 		align-self: flex-end;
-		background: var(--color-primary);
-		color: white;
+		background: var(--color-accent);
+		color: #0a0a0f;
 		border-bottom-right-radius: 4px;
 	}
 
@@ -234,7 +234,7 @@
 		width: 8px;
 		height: 8px;
 		border-radius: 50%;
-		background: var(--color-primary);
+		background: var(--color-accent);
 		animation: pulse 1.5s ease-in-out infinite;
 	}
 
@@ -277,7 +277,7 @@
 
 	.chat-input:focus {
 		outline: none;
-		border-color: var(--color-primary);
+		border-color: var(--color-accent);
 	}
 
 	.chat-input:disabled {
@@ -286,8 +286,8 @@
 	}
 
 	.send-btn {
-		background: var(--color-primary);
-		color: white;
+		background: var(--color-accent);
+		color: #0a0a0f;
 		border: none;
 		border-radius: var(--radius-sm);
 		padding: 0 1.25rem;
@@ -299,7 +299,7 @@
 	}
 
 	.send-btn:hover:not(:disabled) {
-		opacity: 0.9;
+		background: var(--color-accent-light);
 	}
 
 	.send-btn:disabled {

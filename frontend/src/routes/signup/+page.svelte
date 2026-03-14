@@ -114,7 +114,7 @@
 
 	input:focus {
 		outline: none;
-		border-color: var(--color-primary);
+		border-color: var(--color-accent);
 	}
 
 	.error {
@@ -125,8 +125,8 @@
 
 	.submit-btn {
 		padding: 0.75rem;
-		background: var(--color-primary);
-		color: white;
+		background: var(--color-accent);
+		color: #0a0a0f;
 		border: none;
 		border-radius: var(--radius-sm);
 		font-size: 1rem;
@@ -137,7 +137,7 @@
 	}
 
 	.submit-btn:hover:not(:disabled) {
-		opacity: 0.9;
+		background: var(--color-accent-light);
 	}
 
 	.submit-btn:disabled {
@@ -153,7 +153,7 @@
 	}
 
 	.switch a {
-		color: var(--color-primary);
+		color: var(--color-accent);
 		text-decoration: none;
 	}
 

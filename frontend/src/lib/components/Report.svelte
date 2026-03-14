@@ -312,7 +312,7 @@
 		padding: 0.75rem 1rem;
 		background: var(--color-surface);
 		border-radius: var(--radius-sm);
-		border-left: 3px solid var(--color-primary);
+		border-left: 3px solid var(--color-accent);
 		font-size: 0.9rem;
 		line-height: 1.5;
 	}
@@ -333,7 +333,7 @@
 	}
 
 	.source-item a {
-		color: var(--color-primary);
+		color: var(--color-accent);
 		text-decoration: none;
 	}
 

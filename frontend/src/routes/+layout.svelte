@@ -28,7 +28,7 @@
 {#if showNav}
 	<header class="app-header">
 		<div class="header-content">
-			<a href="/" class="logo">Easy MonAI</a>
+			<a href="/" class="logo"><img src="/logo.svg" alt="Easy MonAI" /></a>
 			<nav class="nav-links">
 				{#if isAuthenticated()}
 					<a href="/dashboard" class="nav-link" class:active={currentPath === '/dashboard'}
@@ -69,10 +69,14 @@
 	}
 
 	.logo {
-		font-weight: 700;
-		font-size: 1.25rem;
-		color: var(--color-text);
+		display: flex;
+		align-items: center;
 		text-decoration: none;
+	}
+
+	.logo img {
+		height: 36px;
+		width: auto;
 	}
 
 	.nav-links {
@@ -113,7 +117,7 @@
 	}
 
 	.nav-btn:hover {
-		border-color: var(--color-primary);
+		border-color: var(--color-accent);
 		color: var(--color-text);
 	}
 </style>

@@ -315,24 +315,24 @@
 
 	.language-select:focus {
 		outline: none;
-		border-color: var(--color-primary);
+		border-color: var(--color-accent);
 	}
 
 	.primary-btn {
 		padding: 0.875rem 2rem;
-		background: var(--color-primary);
-		color: white;
+		background: var(--color-accent);
+		color: #0a0a0f;
 		border: none;
 		border-radius: var(--radius-sm);
 		font-size: 1rem;
 		font-weight: 600;
 		cursor: pointer;
-		transition: opacity 0.2s;
+		transition: background 0.2s;
 		width: 100%;
 	}
 
 	.primary-btn:hover {
-		opacity: 0.9;
+		background: var(--color-accent-light);
 	}
 
 	.divider-text {
@@ -419,8 +419,8 @@
 
 	.view-btn {
 		padding: 0.75rem 1.5rem;
-		background: var(--color-primary);
-		color: white;
+		background: var(--color-accent);
+		color: #0a0a0f;
 		border: none;
 		border-radius: var(--radius-sm);
 		font-size: 0.9rem;
@@ -430,7 +430,7 @@
 	}
 
 	.view-btn:hover {
-		opacity: 0.9;
+		background: var(--color-accent-light);
 	}
 
 	.reset-btn {
@@ -444,7 +444,7 @@
 	}
 
 	.reset-btn:hover {
-		border-color: var(--color-primary);
+		border-color: var(--color-accent);
 		background: var(--color-surface);
 	}
 

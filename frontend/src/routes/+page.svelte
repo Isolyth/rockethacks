@@ -162,7 +162,7 @@
 		{/if}
 		{#if showHero}
 			<div class="hero">
-				<h1>Easy MonAI</h1>
+				<img src="/logo.svg" alt="Easy MonAI" class="hero-logo" />
 				<p class="tagline">
 					Your financial life, analyzed and narrated by AI
 				</p>
@@ -177,7 +177,7 @@
 			</div>
 		{:else if auth.user && !guestMode && appState === "idle"}
 			<div class="hero">
-				<h1>Easy MonAI</h1>
+				<img src="/logo.svg" alt="Easy MonAI" class="hero-logo" />
 				<p class="tagline">Welcome back, {auth.user.display_name}!</p>
 				<div class="hero-actions">
 					<button class="primary-btn" onclick={() => goto("/analyze")}
@@ -261,13 +261,9 @@
 		margin: 0 auto;
 	}
 
-	.hero h1 {
-		font-size: 3.5rem;
-		font-weight: 800;
-		margin: 0;
-		background: linear-gradient(to right, var(--color-primary), #b366ff);
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
+	.hero-logo {
+		height: 80px;
+		width: auto;
 	}
 
 	.tagline {
@@ -295,18 +291,18 @@
 
 	.primary-btn {
 		padding: 0.875rem 1.5rem;
-		background: var(--color-primary);
-		color: white;
+		background: var(--color-accent);
+		color: #0a0a0f;
 		border: none;
 		border-radius: var(--radius-sm);
 		font-size: 1rem;
 		font-weight: 600;
 		cursor: pointer;
-		transition: opacity 0.2s;
+		transition: background 0.2s;
 	}
 
 	.primary-btn:hover {
-		opacity: 0.9;
+		background: var(--color-accent-light);
 	}
 
 	.ghost-btn {
@@ -323,7 +319,7 @@
 
 	.ghost-btn:hover {
 		background: var(--color-surface-2);
-		border-color: var(--color-text-muted);
+		border-color: var(--color-accent);
 	}
 
 	.top-bar {
@@ -423,7 +419,7 @@
 	}
 
 	.reset-btn:hover {
-		border-color: var(--color-primary);
+		border-color: var(--color-accent);
 		background: var(--color-surface);
 	}
 

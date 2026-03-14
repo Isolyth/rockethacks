@@ -126,7 +126,7 @@
 		gap: 1.25rem;
 		padding: 1.75rem;
 		background: var(--color-surface);
-		border: 1px solid var(--color-primary);
+		border: 1px solid var(--color-accent);
 		border-radius: var(--radius);
 	}
 
@@ -140,8 +140,8 @@
 		width: 36px;
 		height: 36px;
 		border-radius: 50%;
-		background: var(--color-primary);
-		color: white;
+		background: var(--color-accent);
+		color: #0a0a0f;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -187,16 +187,16 @@
 	}
 
 	.option:hover {
-		border-color: var(--color-primary);
+		border-color: var(--color-accent);
 	}
 
 	.option.selected {
-		border-color: var(--color-primary);
-		background: rgba(99, 102, 241, 0.1);
+		border-color: var(--color-accent);
+		background: rgba(213, 166, 41, 0.1);
 	}
 
 	.option input[type='radio'] {
-		accent-color: var(--color-primary);
+		accent-color: var(--color-accent);
 		width: 16px;
 		height: 16px;
 		flex-shrink: 0;
@@ -219,7 +219,7 @@
 	}
 
 	.custom-input:focus {
-		border-color: var(--color-primary);
+		border-color: var(--color-accent);
 	}
 
 	.custom-input::placeholder {
@@ -244,8 +244,8 @@
 
 	.submit-btn {
 		padding: 0.625rem 1.25rem;
-		background: var(--color-primary);
-		color: white;
+		background: var(--color-accent);
+		color: #0a0a0f;
 		border: none;
 		border-radius: var(--radius-sm);
 		font-size: 0.875rem;
@@ -254,7 +254,7 @@
 	}
 
 	.submit-btn:hover:not(:disabled) {
-		background: var(--color-primary-light);
+		background: var(--color-accent-light);
 	}
 
 	.submit-btn:disabled {

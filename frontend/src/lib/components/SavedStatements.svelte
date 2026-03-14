@@ -107,16 +107,16 @@
 	}
 
 	.stmt-item:hover {
-		border-color: var(--color-primary);
+		border-color: var(--color-accent);
 	}
 
 	.stmt-item.checked {
-		border-color: var(--color-primary);
-		background: rgba(99, 102, 241, 0.05);
+		border-color: var(--color-accent);
+		background: rgba(213, 166, 41, 0.05);
 	}
 
 	.stmt-item input[type='checkbox'] {
-		accent-color: var(--color-primary);
+		accent-color: var(--color-accent);
 		width: 16px;
 		height: 16px;
 		flex-shrink: 0;
@@ -157,7 +157,7 @@
 
 	.selected-count {
 		font-size: 0.8rem;
-		color: var(--color-primary);
+		color: var(--color-accent);
 		margin: 0.5rem 0 0;
 	}
 </style>

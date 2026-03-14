@@ -136,7 +136,7 @@
 
 	.dropzone:hover,
 	.dropzone.dragging {
-		border-color: var(--color-primary);
+		border-color: var(--color-accent);
 		background: var(--color-surface-2);
 		color: var(--color-text);
 	}
@@ -231,13 +231,13 @@
 
 	.language-select:focus {
 		outline: none;
-		border-color: var(--color-primary);
+		border-color: var(--color-accent);
 	}
 
 	.analyze-btn {
 		padding: 0.875rem 2rem;
-		background: var(--color-primary);
-		color: white;
+		background: var(--color-accent);
+		color: #0a0a0f;
 		border: none;
 		border-radius: var(--radius-sm);
 		font-size: 1rem;
@@ -246,7 +246,7 @@
 	}
 
 	.analyze-btn:hover {
-		background: var(--color-primary-light);
+		background: var(--color-accent-light);
 	}
 
 	.file-warning {
