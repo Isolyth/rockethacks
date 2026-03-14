@@ -196,18 +196,18 @@
 
 	.primary-btn {
 		padding: 0.625rem 1.25rem;
-		background: var(--color-accent);
+		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
 		border: none;
 		border-radius: var(--radius-sm);
 		font-size: 0.9rem;
 		font-weight: 600;
 		cursor: pointer;
-		transition: background 0.2s;
+		transition: filter 0.2s;
 	}
 
 	.primary-btn:hover {
-		background: var(--color-accent-light);
+		filter: brightness(1.15);
 	}
 
 	.tabs {

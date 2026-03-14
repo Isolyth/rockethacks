@@ -90,7 +90,7 @@
 
 	.step.active .step-dot {
 		border-color: var(--color-accent);
-		background: var(--color-accent);
+		background: var(--gradient-gold-btn);
 		box-shadow: 0 0 12px rgba(213, 166, 41, 0.4);
 	}
 
@@ -130,7 +130,7 @@
 
 	.bar-fill {
 		height: 100%;
-		background: var(--color-accent);
+		background: var(--gradient-gold-btn);
 		border-radius: 4px;
 		transition: width 0.4s ease;
 	}

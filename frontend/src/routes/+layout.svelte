@@ -54,7 +54,9 @@
 		position: sticky;
 		top: 0;
 		width: 100%;
-		background: var(--color-surface);
+		background: rgba(10, 10, 10, 0.85);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
 		border-bottom: 1px solid var(--color-border);
 		z-index: 100;
 	}
@@ -75,7 +77,7 @@
 	}
 
 	.logo img {
-		height: 36px;
+		height: 48px;
 		width: auto;
 	}
 

@@ -1,7 +1,7 @@
 :root {
-	--color-bg: #0a0a0f;
-	--color-surface: rgba(20, 20, 32, 0.6);
-	--color-surface-2: rgba(28, 28, 46, 0.6);
+	--color-bg: #0a0a0a;
+	--color-surface: rgba(22, 22, 22, 0.6);
+	--color-surface-2: rgba(32, 32, 32, 0.6);
 	--color-primary: #C0C6CC;
 	--color-primary-light: #DDE6EA;
 	--color-accent: #D5A629;
@@ -11,9 +11,10 @@
 	--color-success: #22c55e;
 	--color-danger: #ef4444;
 	--color-warning: #f59e0b;
-	--color-border: #2a2a3e;
+	--color-border: #2a2a2a;
 	--gradient-silver: linear-gradient(180deg, #BAC0C5 0%, #F1F9FE 25%, #656A70 52%, #DDE6EA 77%, #43474D 100%);
 	--gradient-gold: linear-gradient(180deg, #F6E27A 0%, #D5A629 37.5%, #F6D767 75%, #B9822C 100%);
+	--gradient-gold-btn: linear-gradient(135deg, #B9822C 0%, #F6E27A 30%, #D5A629 55%, #F6D767 80%, #B9822C 100%);
 	--radius: 12px;
 	--radius-sm: 8px;
 }

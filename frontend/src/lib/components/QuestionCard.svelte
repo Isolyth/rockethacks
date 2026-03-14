@@ -140,7 +140,7 @@
 		width: 36px;
 		height: 36px;
 		border-radius: 50%;
-		background: var(--color-accent);
+		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
 		display: flex;
 		align-items: center;
@@ -244,17 +244,17 @@
 
 	.submit-btn {
 		padding: 0.625rem 1.25rem;
-		background: var(--color-accent);
+		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
 		border: none;
 		border-radius: var(--radius-sm);
 		font-size: 0.875rem;
 		font-weight: 600;
-		transition: all 0.2s;
+		transition: filter 0.2s;
 	}
 
 	.submit-btn:hover:not(:disabled) {
-		background: var(--color-accent-light);
+		filter: brightness(1.15);
 	}
 
 	.submit-btn:disabled {

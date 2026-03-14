@@ -125,7 +125,7 @@
 
 	.submit-btn {
 		padding: 0.75rem;
-		background: var(--color-accent);
+		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
 		border: none;
 		border-radius: var(--radius-sm);
@@ -137,7 +137,7 @@
 	}
 
 	.submit-btn:hover:not(:disabled) {
-		background: var(--color-accent-light);
+		filter: brightness(1.15);
 	}
 
 	.submit-btn:disabled {

@@ -236,17 +236,17 @@
 
 	.analyze-btn {
 		padding: 0.875rem 2rem;
-		background: var(--color-accent);
+		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
 		border: none;
 		border-radius: var(--radius-sm);
 		font-size: 1rem;
 		font-weight: 600;
-		transition: background 0.2s;
+		transition: filter 0.2s;
 	}
 
 	.analyze-btn:hover {
-		background: var(--color-accent-light);
+		filter: brightness(1.15);
 	}
 
 	.file-warning {

@@ -272,17 +272,17 @@
 		height: 40px;
 		border-radius: 50%;
 		border: none;
-		background: var(--color-accent);
+		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		flex-shrink: 0;
-		transition: background 0.2s;
+		transition: filter 0.2s;
 	}
 
 	.play-btn:hover {
-		background: var(--color-accent-light);
+		filter: brightness(1.15);
 	}
 
 	.time {

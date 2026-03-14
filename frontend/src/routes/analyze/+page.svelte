@@ -320,19 +320,19 @@
 
 	.primary-btn {
 		padding: 0.875rem 2rem;
-		background: var(--color-accent);
+		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
 		border: none;
 		border-radius: var(--radius-sm);
 		font-size: 1rem;
 		font-weight: 600;
 		cursor: pointer;
-		transition: background 0.2s;
+		transition: filter 0.2s;
 		width: 100%;
 	}
 
 	.primary-btn:hover {
-		background: var(--color-accent-light);
+		filter: brightness(1.15);
 	}
 
 	.divider-text {
@@ -419,18 +419,18 @@
 
 	.view-btn {
 		padding: 0.75rem 1.5rem;
-		background: var(--color-accent);
+		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
 		border: none;
 		border-radius: var(--radius-sm);
 		font-size: 0.9rem;
 		font-weight: 600;
 		cursor: pointer;
-		transition: opacity 0.2s;
+		transition: filter 0.2s;
 	}
 
 	.view-btn:hover {
-		background: var(--color-accent-light);
+		filter: brightness(1.15);
 	}
 
 	.reset-btn {
