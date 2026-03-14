@@ -1,36 +1,42 @@
 <script lang="ts">
-	import { handleDrop as onDrop, handleFileSelect as onFileSelect, filterValidFiles, formatSize } from '$lib/utils/file-upload';
+	import {
+		handleDrop as onDrop,
+		handleFileSelect as onFileSelect,
+		filterValidFiles,
+		formatSize,
+	} from "$lib/utils/file-upload";
 
-	let { onupload }: { onupload: (files: File[], language: string) => void } = $props();
+	let { onupload }: { onupload: (files: File[], language: string) => void } =
+		$props();
 
 	const languages = [
-		{ code: 'en', name: 'English' },
-		{ code: 'es', name: 'Spanish' },
-		{ code: 'fr', name: 'French' },
-		{ code: 'de', name: 'German' },
-		{ code: 'pt', name: 'Portuguese' },
-		{ code: 'it', name: 'Italian' },
-		{ code: 'ja', name: 'Japanese' },
-		{ code: 'ko', name: 'Korean' },
-		{ code: 'zh', name: 'Chinese' },
-		{ code: 'hi', name: 'Hindi' },
-		{ code: 'ar', name: 'Arabic' },
-		{ code: 'nl', name: 'Dutch' },
-		{ code: 'pl', name: 'Polish' },
-		{ code: 'ru', name: 'Russian' },
+		{ code: "en", name: "English" },
+		{ code: "es", name: "Spanish" },
+		{ code: "fr", name: "French" },
+		{ code: "de", name: "German" },
+		{ code: "pt", name: "Portuguese" },
+		{ code: "it", name: "Italian" },
+		{ code: "ja", name: "Japanese" },
+		{ code: "ko", name: "Korean" },
+		{ code: "zh", name: "Chinese" },
+		{ code: "hi", name: "Hindi" },
+		{ code: "ar", name: "Arabic" },
+		{ code: "nl", name: "Dutch" },
+		{ code: "pl", name: "Polish" },
+		{ code: "ru", name: "Russian" },
 	];
 
 	let files = $state<File[]>([]);
-	let selectedLanguage = $state('en');
+	let selectedLanguage = $state("en");
 	let dragging = $state(false);
 	let fileInput: HTMLInputElement;
 
-	let fileWarning = $state('');
+	let fileWarning = $state("");
 
 	function addFiles(newFiles: File[]) {
 		const { valid, rejected } = filterValidFiles(newFiles);
 		files = [...files, ...valid];
-		fileWarning = rejected.length > 0 ? rejected.join(', ') : '';
+		fileWarning = rejected.length > 0 ? rejected.join(", ") : "";
 	}
 
 	function removeFile(index: number) {
@@ -63,7 +69,14 @@
 		type="button"
 	>
 		<div class="dropzone-icon">
-			<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+			<svg
+				width="48"
+				height="48"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="1.5"
+			>
 				<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
 				<polyline points="17 8 12 3 7 8" />
 				<line x1="12" y1="3" x2="12" y2="15" />
@@ -82,6 +95,10 @@
 		hidden
 	/>
 
+	<p class="disclosure-text">
+		Note: Uploaded documents will be processed by a third-party AI service.
+	</p>
+
 	{#if fileWarning}
 		<p class="file-warning">{fileWarning}</p>
 	{/if}
@@ -90,25 +107,42 @@
 		<div class="file-list">
 			{#each files as file, i}
 				<div class="file-item">
-					<span class="file-icon">{file.name.endsWith('.pdf') ? '📄' : '📊'}</span>
+					<span class="file-icon"
+						>{file.name.endsWith(".pdf") ? "📄" : "📊"}</span
+					>
 					<span class="file-name">{file.name}</span>
 					<span class="file-size">{formatSize(file.size)}</span>
-					<button class="file-remove" onclick={() => removeFile(i)} type="button">&times;</button>
+					<button
+						class="file-remove"
+						onclick={() => removeFile(i)}
+						type="button">&times;</button
+					>
 				</div>
 			{/each}
 		</div>
 
 		<div class="language-row">
-			<label class="language-label" for="lang-select">Report & podcast language</label>
-			<select id="lang-select" class="language-select" bind:value={selectedLanguage}>
+			<label class="language-label" for="lang-select"
+				>Report & podcast language</label
+			>
+			<select
+				id="lang-select"
+				class="language-select"
+				bind:value={selectedLanguage}
+			>
 				{#each languages as lang}
 					<option value={lang.code}>{lang.name}</option>
 				{/each}
 			</select>
 		</div>
 
-		<button class="analyze-btn" onclick={() => onupload(files, selectedLanguage)} type="button">
-			Analyze {files.length} {files.length === 1 ? 'file' : 'files'}
+		<button
+			class="analyze-btn"
+			onclick={() => onupload(files, selectedLanguage)}
+			type="button"
+		>
+			Analyze {files.length}
+			{files.length === 1 ? "file" : "files"}
 		</button>
 	{/if}
 </div>
@@ -155,6 +189,13 @@
 	.dropzone-sub {
 		font-size: 0.875rem;
 		opacity: 0.7;
+	}
+
+	.disclosure-text {
+		font-size: 0.8rem;
+		color: var(--color-text-muted);
+		text-align: center;
+		margin-top: -1rem;
 	}
 
 	.file-list {
