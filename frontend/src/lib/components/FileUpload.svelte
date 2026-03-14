@@ -166,6 +166,7 @@
 		color: var(--color-text-muted);
 		width: 100%;
 		font-size: inherit;
+		box-shadow: var(--shadow-inset);
 	}
 
 	.dropzone:hover,

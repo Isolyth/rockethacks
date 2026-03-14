@@ -146,6 +146,7 @@
 		border-radius: var(--radius);
 		border: 1px solid var(--color-border);
 		padding: 2rem;
+		box-shadow: var(--shadow-inset);
 	}
 
 	h2 {
@@ -176,6 +177,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
+		box-shadow: var(--shadow-inset);
 	}
 
 	.card-label {

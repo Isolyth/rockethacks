@@ -392,6 +392,7 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 1rem;
+		box-shadow: var(--shadow-inset);
 	}
 
 	.error-icon {

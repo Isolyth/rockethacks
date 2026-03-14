@@ -223,6 +223,7 @@
 		max-height: 350px;
 		overflow-y: auto;
 		scroll-behavior: smooth;
+		box-shadow: var(--shadow-inset);
 	}
 
 	.script-text {
@@ -265,6 +266,7 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius);
 		padding: 0.75rem 1rem;
+		box-shadow: var(--shadow-inset);
 	}
 
 	.play-btn {

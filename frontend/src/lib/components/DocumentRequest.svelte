@@ -123,6 +123,7 @@
 		background: var(--color-surface);
 		border: 1px solid var(--color-warning);
 		border-radius: var(--radius);
+		box-shadow: var(--shadow-inset);
 	}
 
 	.request-header {

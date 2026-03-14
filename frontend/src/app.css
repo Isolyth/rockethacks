@@ -17,8 +17,9 @@
 	--gradient-gold-btn: linear-gradient(135deg, #B9822C 0%, #F6E27A 30%, #D5A629 55%, #F6D767 80%, #B9822C 100%);
 	--color-gold-border: #96722B;
 	--gold-btn-shadow: inset 0 2px 4px rgba(255, 235, 170, 0.45), inset 0 -1px 3px rgba(0, 0, 0, 0.2);
-	--radius: 12px;
-	--radius-sm: 8px;
+	--radius: 4px;
+	--radius-sm: 2px;
+	--shadow-inset: inset 0 2px 8px rgba(0, 0, 0, 0.45), inset 0 1px 3px rgba(0, 0, 0, 0.3);
 	--radius-pill: 9999px;
 }
 

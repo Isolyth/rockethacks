@@ -128,6 +128,7 @@
 		background: var(--color-surface);
 		border: 1px solid var(--color-accent);
 		border-radius: var(--radius);
+		box-shadow: var(--shadow-inset);
 	}
 
 	.question-header {

@@ -148,6 +148,7 @@
 		padding: 1.5rem;
 		display: flex;
 		flex-direction: column;
+		box-shadow: var(--shadow-inset);
 	}
 
 	h3 {

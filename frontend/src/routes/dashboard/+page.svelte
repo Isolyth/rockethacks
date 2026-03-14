@@ -268,6 +268,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
+		box-shadow: var(--shadow-inset);
 	}
 
 	.card-header {

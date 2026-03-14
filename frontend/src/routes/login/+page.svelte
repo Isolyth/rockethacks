@@ -67,6 +67,7 @@
 		padding: 2.5rem;
 		width: 100%;
 		max-width: 420px;
+		box-shadow: var(--shadow-inset);
 	}
 
 	h1 {
