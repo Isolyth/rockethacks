@@ -116,10 +116,31 @@
 	}
 
 	.stmt-item input[type='checkbox'] {
-		accent-color: var(--color-accent);
-		width: 16px;
-		height: 16px;
+		appearance: none;
+		-webkit-appearance: none;
+		width: 18px;
+		height: 18px;
+		border: 2px solid var(--color-border);
+		border-radius: 4px;
 		flex-shrink: 0;
+		cursor: pointer;
+		position: relative;
+		transition: border-color 0.15s, background 0.15s;
+	}
+
+	.stmt-item input[type='checkbox']:checked {
+		border-color: var(--color-accent);
+		background: var(--color-accent);
+	}
+
+	.stmt-item input[type='checkbox']:checked::after {
+		content: '✓';
+		position: absolute;
+		top: -1px;
+		left: 2px;
+		font-size: 13px;
+		font-weight: 700;
+		color: #0a0a0f;
 	}
 
 	.stmt-info {

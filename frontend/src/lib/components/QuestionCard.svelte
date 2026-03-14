@@ -196,10 +196,31 @@
 	}
 
 	.option input[type='radio'] {
-		accent-color: var(--color-accent);
-		width: 16px;
-		height: 16px;
+		appearance: none;
+		-webkit-appearance: none;
+		width: 18px;
+		height: 18px;
+		border: 2px solid var(--color-border);
+		border-radius: 50%;
 		flex-shrink: 0;
+		cursor: pointer;
+		position: relative;
+		transition: border-color 0.15s;
+	}
+
+	.option input[type='radio']:checked {
+		border-color: var(--color-accent);
+	}
+
+	.option input[type='radio']:checked::after {
+		content: '';
+		position: absolute;
+		top: 3px;
+		left: 3px;
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: var(--color-accent);
 	}
 
 	.option-text {
