@@ -1,290 +1,206 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
-	import FileUpload from "$lib/components/FileUpload.svelte";
-	import ProgressBar from "$lib/components/ProgressBar.svelte";
-	import Report from "$lib/components/Report.svelte";
-	import PodcastPlayer from "$lib/components/PodcastPlayer.svelte";
-	import DocumentRequestCard from "$lib/components/DocumentRequest.svelte";
-	import QuestionCard from "$lib/components/QuestionCard.svelte";
-	import ThinkingIndicator from "$lib/components/ThinkingIndicator.svelte";
-	import AdvisorChat from "$lib/components/AdvisorChat.svelte";
-	import { startAnalysis, type AnalysisHandle } from "$lib/api";
 	import { auth, isAuthenticated } from "$lib/stores/auth.svelte";
-	import type {
-		AppState,
-		ProgressEvent,
-		FinancialReport,
-		PodcastAudio,
-		DocumentRequest,
-		AgentQuestion,
-	} from "$lib/types";
 
-	let appState = $state<AppState>("idle");
-	let guestMode = $state(false);
-	let progress = $state<ProgressEvent>({
-		step: "parsing",
-		message: "",
-		percent: 0,
-	});
-	let report = $state<FinancialReport | null>(null);
-	let podcastAudio = $state<PodcastAudio | null>(null);
-	let errorMessage = $state("");
-	let documentRequest = $state<DocumentRequest | null>(null);
-	let agentQuestion = $state<AgentQuestion | null>(null);
-	let thinkingText = $state("");
-	let analysisHandle = $state<AnalysisHandle | null>(null);
-
-	let stillProcessing = $derived(
-		appState === "processing" && report !== null,
-	);
-	let showHero = $derived(!guestMode && !auth.loading && !auth.user);
-
-	// Redirect authenticated users straight to dashboard
 	$effect(() => {
-		if (!auth.loading && isAuthenticated() && !guestMode && appState === "idle") {
+		if (!auth.loading && isAuthenticated()) {
 			goto("/dashboard");
 		}
 	});
-
-	function handleUpload(files: File[], language: string) {
-		appState = "processing";
-		progress = {
-			step: "parsing",
-			message: "Uploading files...",
-			percent: 5,
-		};
-		errorMessage = "";
-		report = null;
-		podcastAudio = null;
-
-		analysisHandle = startAnalysis({
-			files,
-			language,
-			onProgress: (evt) => {
-				progress = evt;
-				thinkingText = "";
-			},
-			onReportReady: (rpt) => {
-				report = rpt;
-			},
-			onPodcastAudioReady: (audio) => {
-				podcastAudio = audio;
-				appState = "done";
-				analysisHandle = null;
-			},
-			onError: (msg) => {
-				errorMessage = msg;
-				appState = "error";
-				analysisHandle = null;
-			},
-			onDocumentRequest: (req) => {
-				documentRequest = req;
-				appState = "awaiting_documents";
-				thinkingText = "";
-				progress = {
-					step: "analyzing",
-					message: "Agent needs additional information",
-					percent: 50,
-				};
-			},
-			onAskQuestion: (q) => {
-				agentQuestion = q;
-				appState = "awaiting_answer";
-				thinkingText = "";
-				progress = {
-					step: "analyzing",
-					message: "Agent has a question for you",
-					percent: 50,
-				};
-			},
-			onThinking: (text) => {
-				thinkingText = text;
-			},
-		});
-	}
-
-	async function handleDocumentResponse(
-		action: "upload" | "skip",
-		files?: File[],
-	) {
-		if (!analysisHandle) return;
-		await analysisHandle.respond(action, files);
-		appState = "processing";
-		progress = {
-			step: "analyzing",
-			message: "Continuing analysis...",
-			percent: 55,
-		};
-		documentRequest = null;
-	}
-
-	function handleQuestionAnswer(answer: string) {
-		if (!analysisHandle) return;
-		analysisHandle.answerQuestion(answer);
-		appState = "processing";
-		progress = {
-			step: "analyzing",
-			message: "Continuing analysis...",
-			percent: 55,
-		};
-		agentQuestion = null;
-	}
-
-	function reset() {
-		if (analysisHandle) {
-			analysisHandle.close();
-			analysisHandle = null;
-		}
-		appState = "idle";
-		report = null;
-		podcastAudio = null;
-		errorMessage = "";
-		documentRequest = null;
-		agentQuestion = null;
-		thinkingText = "";
-		progress = { step: "parsing", message: "", percent: 0 };
-	}
-
-	function handleBack() {
-		if (appState !== "idle") {
-			reset();
-		} else if (guestMode) {
-			guestMode = false;
-		}
-	}
 </script>
 
 <svelte:head>
-	<title>Easy MonAI - Bank Statement Analyzer</title>
+	<title>Easy MonAI - AI-Powered Financial Analysis</title>
 </svelte:head>
 
 <main>
-	<div class="content">
-		{#if !showHero && (guestMode || appState !== "idle")}
-			<div class="top-bar">
-				<button class="back-btn" onclick={handleBack} type="button">
-					<span class="back-icon">←</span> Back
-				</button>
-			</div>
-		{/if}
-		{#if showHero}
-			<div class="hero">
-				<img src="/logo.svg" alt="Easy MonAI" class="hero-logo" />
-				<p class="tagline">
-					Your financial life, analyzed and narrated by AI
-				</p>
-				<div class="hero-actions">
-					<button class="primary-btn" onclick={() => goto("/login")}
-						>Log In / Sign Up</button
-					>
-					<button class="ghost-btn" onclick={() => (guestMode = true)}
-						>Continue as Guest</button
-					>
-				</div>
-			</div>
-		{:else if appState === "idle"}
-			<FileUpload onupload={handleUpload} />
-		{:else if appState === "awaiting_documents" && documentRequest}
-			<ProgressBar {progress} />
-			<DocumentRequestCard
-				request={documentRequest}
-				onrespond={handleDocumentResponse}
-			/>
-		{:else if appState === "awaiting_answer" && agentQuestion}
-			<ProgressBar {progress} />
-			<QuestionCard
-				question={agentQuestion}
-				onAnswer={handleQuestionAnswer}
-			/>
-		{:else if appState === "error"}
-			<div class="error-card">
-				<p class="error-icon">!</p>
-				<p class="error-message">{errorMessage}</p>
-				<button class="reset-btn" onclick={reset} type="button"
-					>Try again</button
+	<!-- Hero -->
+	<section class="hero">
+		<div class="hero-inner">
+			<img src="/logo.svg" alt="Easy MonAI" class="hero-logo" />
+			<h1>Your financial life, analyzed and narrated by AI</h1>
+			<p class="hero-sub">
+				Upload your bank statements and get a detailed financial report with
+				spending breakdowns, insights, and a personalized AI-narrated podcast
+				— all in seconds.
+			</p>
+			<div class="hero-actions">
+				<button
+					class="primary-btn"
+					onclick={() => goto("/signup")}
+					type="button">Get Started Free</button
+				>
+				<button
+					class="ghost-btn"
+					onclick={() => goto("/login")}
+					type="button">Log In</button
 				>
 			</div>
-		{:else if report}
-			<div class="results-grid">
-				<div class="results-col results-col--left">
-					<Report {report} />
-				</div>
-				<div class="results-col results-col--right">
-					{#if stillProcessing}
-						<ProgressBar {progress} />
-						<p class="generating-hint">
-							Generating your podcast...
-						</p>
-					{/if}
-					{#if podcastAudio}
-						<PodcastPlayer
-							podcastScript={podcastAudio.podcast_script}
-							audioBase64={podcastAudio.audio_base64}
-							sentences={podcastAudio.sentences}
-						/>
-					{/if}
-					{#if appState === "done" && report}
-						<AdvisorChat {report} />
-					{/if}
-				</div>
-			</div>
+		</div>
+	</section>
 
-			{#if appState === "done"}
-				<button class="reset-btn" onclick={reset} type="button"
-					>Analyze more statements</button
-				>
-			{/if}
-		{:else if appState === "processing"}
-			<ProgressBar {progress} />
-			{#if progress.step === "analyzing"}
-				<ThinkingIndicator text={thinkingText} />
-			{/if}
-		{/if}
-	</div>
+	<!-- Features -->
+	<section class="features">
+		<h2>What you get</h2>
+		<div class="feature-grid">
+			<div class="feature-card">
+				<div class="feature-icon">
+					<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+						<polyline points="14 2 14 8 20 8" />
+						<line x1="16" y1="13" x2="8" y2="13" />
+						<line x1="16" y1="17" x2="8" y2="17" />
+						<polyline points="10 9 9 9 8 9" />
+					</svg>
+				</div>
+				<h3>Smart Parsing</h3>
+				<p>Upload PDF or CSV bank statements. Our AI reads and categorizes every transaction automatically.</p>
+			</div>
+			<div class="feature-card">
+				<div class="feature-icon">
+					<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<line x1="18" y1="20" x2="18" y2="10" />
+						<line x1="12" y1="20" x2="12" y2="4" />
+						<line x1="6" y1="20" x2="6" y2="14" />
+					</svg>
+				</div>
+				<h3>Detailed Reports</h3>
+				<p>Get income vs. expenses, category breakdowns, top merchants, and actionable financial insights.</p>
+			</div>
+			<div class="feature-card">
+				<div class="feature-icon">
+					<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path d="M9 18V5l12-2v13" />
+						<circle cx="6" cy="18" r="3" />
+						<circle cx="18" cy="16" r="3" />
+					</svg>
+				</div>
+				<h3>AI Podcast</h3>
+				<p>Listen to a personalized narration of your finances, complete with highlights and recommendations.</p>
+			</div>
+			<div class="feature-card">
+				<div class="feature-icon">
+					<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+					</svg>
+				</div>
+				<h3>Advisor Chat</h3>
+				<p>Ask follow-up "what-if" questions and get AI-powered financial advice based on your data.</p>
+			</div>
+		</div>
+	</section>
+
+	<!-- How it works -->
+	<section class="how-it-works">
+		<h2>How it works</h2>
+		<div class="steps">
+			<div class="step">
+				<span class="step-number">1</span>
+				<h3>Upload</h3>
+				<p>Drop in your bank statement PDFs or CSVs</p>
+			</div>
+			<div class="step-arrow">
+				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<line x1="5" y1="12" x2="19" y2="12" />
+					<polyline points="12 5 19 12 12 19" />
+				</svg>
+			</div>
+			<div class="step">
+				<span class="step-number">2</span>
+				<h3>Analyze</h3>
+				<p>AI parses, categorizes, and generates your report</p>
+			</div>
+			<div class="step-arrow">
+				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<line x1="5" y1="12" x2="19" y2="12" />
+					<polyline points="12 5 19 12 12 19" />
+				</svg>
+			</div>
+			<div class="step">
+				<span class="step-number">3</span>
+				<h3>Listen & Explore</h3>
+				<p>Get your podcast, review insights, and chat with your advisor</p>
+			</div>
+		</div>
+	</section>
+
+	<!-- Languages -->
+	<section class="languages-section">
+		<h2>Available in 14 languages</h2>
+		<p class="languages-sub">
+			English, Spanish, French, German, Portuguese, Italian, Japanese, Korean, Chinese, Hindi, Arabic, Dutch, Polish, and Russian
+		</p>
+	</section>
+
+	<!-- CTA -->
+	<section class="cta">
+		<h2>Ready to understand your finances?</h2>
+		<p>Sign up for free and run your first analysis in under a minute.</p>
+		<button
+			class="primary-btn"
+			onclick={() => goto("/signup")}
+			type="button">Get Started</button
+		>
+	</section>
+
+	<footer class="landing-footer">
+		<p>Easy MonAI</p>
+	</footer>
 </main>
 
 <style>
+	main {
+		min-height: 100vh;
+		display: flex;
+		flex-direction: column;
+	}
+
+	/* Hero */
 	.hero {
+		padding: 5rem 1.5rem 4rem;
 		text-align: center;
-		padding: 4rem 1rem;
+		display: flex;
+		justify-content: center;
+	}
+
+	.hero-inner {
+		max-width: 680px;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		gap: 1.5rem;
-		max-width: 600px;
-		margin: 0 auto;
 	}
 
 	.hero-logo {
-		height: 80px;
+		height: 90px;
 		width: auto;
 	}
 
-	.tagline {
-		font-size: 1.25rem;
+	h1 {
+		font-size: 2.25rem;
+		font-weight: 700;
+		line-height: 1.15;
+		background: var(--gradient-gold);
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
+	}
+
+	.hero-sub {
+		font-size: 1.1rem;
 		color: var(--color-text-muted);
-		margin: 0;
+		line-height: 1.6;
+		max-width: 540px;
 	}
 
 	.hero-actions {
 		display: flex;
 		gap: 1rem;
-		margin-top: 1rem;
-	}
-
-	@media (max-width: 600px) {
-		.hero-actions {
-			flex-direction: column;
-			width: 100%;
-		}
-
-		.hero-actions > button {
-			width: 100%;
-		}
+		margin-top: 0.5rem;
 	}
 
 	.primary-btn {
-		padding: 0.875rem 1.5rem;
+		padding: 0.875rem 1.75rem;
 		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
 		border: 2px solid var(--color-gold-border);
@@ -301,7 +217,7 @@
 	}
 
 	.ghost-btn {
-		padding: 0.875rem 1.5rem;
+		padding: 0.875rem 1.75rem;
 		background: transparent;
 		color: var(--color-text);
 		border: 1px solid var(--color-border);
@@ -317,140 +233,176 @@
 		border-color: var(--color-accent);
 	}
 
-	.top-bar {
+	/* Features */
+	.features {
+		padding: 4rem 1.5rem;
+		max-width: 1000px;
+		margin: 0 auto;
 		width: 100%;
-		max-width: 1400px;
-		display: flex;
-		justify-content: flex-start;
-		margin-bottom: -1rem;
 	}
 
-	.back-btn {
-		display: inline-flex;
+	.features h2,
+	.how-it-works h2,
+	.languages-section h2,
+	.cta h2 {
+		text-align: center;
+		font-size: 1.5rem;
+		font-weight: 700;
+		margin-bottom: 2rem;
+	}
+
+	.feature-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+		gap: 1.5rem;
+	}
+
+	.feature-card {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+		padding: 1.5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.feature-icon {
+		color: var(--color-accent);
+	}
+
+	.feature-card h3 {
+		font-size: 1.05rem;
+		font-weight: 600;
+	}
+
+	.feature-card p {
+		font-size: 0.9rem;
+		color: var(--color-text-muted);
+		line-height: 1.5;
+	}
+
+	/* How it works */
+	.how-it-works {
+		padding: 4rem 1.5rem;
+		max-width: 800px;
+		margin: 0 auto;
+		width: 100%;
+	}
+
+	.steps {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 1.5rem;
+	}
+
+	.step {
+		text-align: center;
+		display: flex;
+		flex-direction: column;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.5rem 1rem;
-		background: transparent;
-		color: var(--color-text-muted);
-		border: 1px solid transparent;
-		border-radius: var(--radius-sm);
-		font-size: 0.95rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.2s ease;
+		flex: 1;
 	}
 
-	.back-btn:hover {
-		color: var(--color-text);
-		background: var(--color-surface-2);
-		border-color: var(--color-border);
-		transform: translateX(-2px);
-	}
-
-	.back-icon {
+	.step-number {
+		width: 40px;
+		height: 40px;
+		border-radius: 50%;
+		background: var(--gradient-gold-btn);
+		border: 2px solid var(--color-gold-border);
+		color: #0a0a0f;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-weight: 700;
 		font-size: 1.1rem;
-		transition: transform 0.2s ease;
+		box-shadow: var(--gold-btn-shadow);
 	}
 
-	.back-btn:hover .back-icon {
-		transform: translateX(-2px);
+	.step h3 {
+		font-size: 1rem;
+		font-weight: 600;
 	}
 
-	main {
-		min-height: 100vh;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
+	.step p {
+		font-size: 0.85rem;
+		color: var(--color-text-muted);
+		line-height: 1.4;
+	}
+
+	.step-arrow {
+		color: var(--color-text-muted);
+		flex-shrink: 0;
+		margin-top: -2rem;
+	}
+
+	/* Languages */
+	.languages-section {
 		padding: 3rem 1.5rem;
-	}
-
-	.content {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 2.5rem;
-		width: 100%;
-	}
-
-	.error-card {
 		text-align: center;
-		padding: 2rem;
-		background: var(--color-surface);
-		border: 1px solid var(--color-danger);
-		border-radius: var(--radius);
-		max-width: 480px;
+	}
+
+	.languages-sub {
+		color: var(--color-text-muted);
+		font-size: 0.95rem;
+		max-width: 600px;
+		margin: 0 auto;
+		line-height: 1.6;
+	}
+
+	/* CTA */
+	.cta {
+		padding: 4rem 1.5rem;
+		text-align: center;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		gap: 1rem;
 	}
 
-	.error-icon {
-		width: 48px;
-		height: 48px;
-		border-radius: 50%;
-		background: var(--color-danger);
-		color: white;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 1.5rem;
-		font-weight: 700;
-	}
-
-	.error-message {
+	.cta p {
 		color: var(--color-text-muted);
-		font-size: 0.95rem;
+		font-size: 1rem;
+		margin-bottom: 0.5rem;
 	}
 
-	.reset-btn {
-		padding: 0.75rem 1.5rem;
-		background: var(--color-surface-2);
-		color: var(--color-text);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-pill);
-		font-size: 0.9rem;
-		transition: all 0.2s;
-	}
-
-	.reset-btn:hover {
-		border-color: var(--color-accent);
-		background: var(--color-surface);
-	}
-
-	.results-grid {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 2.5rem;
-		width: 100%;
-		max-width: 1400px;
-		align-items: start;
-	}
-
-	.results-col {
-		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
-		min-width: 0;
-	}
-
-	.generating-hint {
+	/* Footer */
+	.landing-footer {
 		text-align: center;
+		padding: 2rem 1.5rem;
+		border-top: 1px solid var(--color-border);
+		margin-top: auto;
+	}
+
+	.landing-footer p {
+		font-size: 0.8rem;
 		color: var(--color-text-muted);
-		font-size: 0.9rem;
-		padding: 2rem 1rem;
-		background: var(--color-surface);
-		border: 1px dashed var(--color-border);
-		border-radius: var(--radius);
 	}
 
-	.results-col--right :global(.progress-container) {
-		max-width: none;
-	}
+	/* Responsive */
+	@media (max-width: 600px) {
+		h1 {
+			font-size: 1.65rem;
+		}
 
-	@media (max-width: 768px) {
-		.results-grid {
-			grid-template-columns: 1fr;
+		.hero-actions {
+			flex-direction: column;
+			width: 100%;
+		}
+
+		.hero-actions > button {
+			width: 100%;
+		}
+
+		.steps {
+			flex-direction: column;
+		}
+
+		.step-arrow {
+			transform: rotate(90deg);
+			margin-top: 0;
 		}
 	}
 </style>
