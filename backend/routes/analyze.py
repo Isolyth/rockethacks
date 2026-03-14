@@ -58,8 +58,8 @@ async def _save_statement_to_aws(user_id: str, name: str, content_bytes: bytes) 
 
 
 async def _save_report_to_aws(user_id: str, report_data: dict, podcast_script: str,
-                               audio_base64: str | None, language: str,
-                               statement_ids: list[str]) -> str | None:
+                               audio_base64: str | None, sentences: list[dict],
+                               language: str, statement_ids: list[str]) -> str | None:
     """Save a completed report to DynamoDB (and audio to S3). Returns report_id."""
     report_id = uuid.uuid4().hex
 
@@ -80,6 +80,7 @@ async def _save_report_to_aws(user_id: str, report_data: dict, podcast_script: s
         "report": report_data,
         "podcast_script": podcast_script,
         "audio_s3_key": audio_s3_key,
+        "sentences": sentences,
         "statement_ids": statement_ids,
     })
 
@@ -365,7 +366,8 @@ async def ws_analyze(ws: WebSocket):
             try:
                 report_id = await _save_report_to_aws(
                     session.user_id, report_data, podcast_script,
-                    audio_base64_result, language, statement_ids,
+                    audio_base64_result, sentences_result,
+                    language, statement_ids,
                 )
             except Exception as e:
                 logger.error(f"Failed to save report: {e}", exc_info=True)

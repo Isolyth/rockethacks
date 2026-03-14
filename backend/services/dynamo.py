@@ -73,6 +73,7 @@ async def save_report(user_id: str, report_id: str, data: dict) -> bool:
         "report_json": json.dumps(data["report"]),
         "podcast_script": data.get("podcast_script", ""),
         "audio_s3_key": data.get("audio_s3_key") or "",
+        "sentences_json": json.dumps(data.get("sentences", [])),
         "statement_ids": data.get("statement_ids", []),
     }
 
@@ -124,6 +125,7 @@ async def get_report(user_id: str, report_id: str) -> dict | None:
 
     item = _decimal_to_num(item)
     item["report"] = json.loads(item.pop("report_json", "{}"))
+    item["sentences"] = json.loads(item.pop("sentences_json", "[]"))
     return item
 
 

@@ -105,6 +105,7 @@ class ReportDetail(BaseModel):
     report: FinancialReport
     podcast_script: str
     audio_url: str | None = None
+    sentences: list[dict] = []
     statements: list[dict] = []
 
 

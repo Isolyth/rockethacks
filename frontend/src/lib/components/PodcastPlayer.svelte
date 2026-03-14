@@ -100,7 +100,7 @@
 
 	<!-- Script text with highlighting -->
 	<div class="script-scroll" bind:this={scrollContainer}>
-		{#if hasAudio}
+		{#if hasAudio && sentences.length > 0}
 			<div class="script-text">
 				{#each sentences as sentence, i}
 					<span
