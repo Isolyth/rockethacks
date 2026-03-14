@@ -194,7 +194,7 @@ async def _parse_and_save_files(files: list[dict], user_id: str | None,
 
 
 @router.websocket("/ws/analyze")
-async def ws_analyze(ws: WebSocket, token: str | None = None, enc_key: str | None = None):
+async def ws_analyze(ws: WebSocket):
     client_ip = _get_client_ip(ws)
 
     # Enforce per-IP connection limit
@@ -202,34 +202,32 @@ async def ws_analyze(ws: WebSocket, token: str | None = None, enc_key: str | Non
         await ws.close(code=4029, reason="Too many connections")
         return
 
-    # Authenticate before accepting connection
-    user_info = None
-    if token:
-        user_info = await get_user_from_token(token)
-        if user_info is None:
-            await ws.close(code=4001, reason="Invalid token")
-            release_ws_connection(client_ip)
-            return
-
     await ws.accept()
     session_id = uuid.uuid4().hex
     session = Session(session_id=session_id)
-    
-    if user_info:
-        session.user_id = user_info["id"]
-        if enc_key:
-            session.encryption_key = base64.b64decode(enc_key)
-        logger.info(f"Authenticated WebSocket session for user {session.user_id}")
-        
     sessions[session_id] = session
 
     try:
-        # Step 1: Receive initial message
+        # Step 1: Receive initial message (includes auth credentials in body)
         try:
             msg = await _receive_json(ws)
         except (json.JSONDecodeError, asyncio.TimeoutError):
             await send_json(ws, {"type": "error", "message": "Invalid or missing initial message"})
             return
+
+        # Authenticate from message body (not query params — avoids token in server logs)
+        token = msg.get("token")
+        if token:
+            user_info = await get_user_from_token(token)
+            if user_info is None:
+                await send_json(ws, {"type": "error", "message": "Invalid or expired token"})
+                await ws.close(code=4001, reason="Invalid token")
+                return
+            session.user_id = user_info["id"]
+            enc_key_b64 = msg.get("enc_key")
+            if enc_key_b64:
+                session.encryption_key = base64.b64decode(enc_key_b64)
+            logger.info(f"Authenticated WebSocket session for user {session.user_id}")
 
         t0 = time.time()
         language = msg.get("language", "en")
