@@ -6,6 +6,7 @@
 - [Python](https://www.python.org/) 3.12 (see `.python-version`)
 - [Google AI Studio](https://aistudio.google.com/apikey) API key (Gemini)
 - [ElevenLabs](https://elevenlabs.io/) API key (for podcast audio; optional - app falls back to script-only)
+- AWS account with Cognito user pool, DynamoDB, and S3 bucket (optional - only needed for user accounts and persistence; not needed for guest mode)
 
 ## Backend Setup
 
@@ -23,12 +24,24 @@ Create environment file:
 cp .env.example .env
 ```
 
-Edit `.env` and add your API keys:
+Edit `.env` and add your configuration:
 
 ```
-GEMINI_API_KEY=your-gemini-api-key-here
-ELEVENLABS_API_KEY=your-elevenlabs-api-key-here
+GEMINI_API_KEY=your-key          # Required
+ELEVENLABS_API_KEY=your-key      # Optional (falls back to script-only)
+
+# For user accounts & persistence (all optional for guest mode):
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_REGION=us-east-1
+AWS_S3_BUCKET=monai-uploads
+COGNITO_USER_POOL_ID=...
+COGNITO_CLIENT_ID=...
+COGNITO_CLIENT_SECRET=...
+CORS_ORIGINS=http://localhost:5173
 ```
+
+See `backend/config.py` for all env vars with defaults.
 
 Start the backend:
 
@@ -78,6 +91,18 @@ npm run build
 npm run preview   # preview the production build
 ```
 
+## Docker Deployment
+
+```sh
+# Set env vars for frontend build
+export VITE_API_URL=https://your-domain.com
+export VITE_WS_URL=wss://your-domain.com/ws/analyze
+
+docker compose up -d --build
+```
+
+Services: backend (port 8000), frontend (port 3000), nginx (80/443 with Let's Encrypt), certbot (auto-renewal).
+
 ## Troubleshooting
 
 **"WebSocket connection error. Is the backend running?"**
@@ -94,5 +119,13 @@ npm run preview   # preview the production build
 - Some PDFs use images instead of text; pypdf can only extract text-based PDFs
 
 **CORS errors in browser**
-- Backend CORS is configured for `http://localhost:5173` only
-- If using a different port, update `allow_origins` in `backend/main.py`
+- Update `CORS_ORIGINS` env var in backend `.env` (comma-separated list of allowed origins)
+
+**"Too many connections" / WebSocket close code 4029**
+- Per-IP limit of 5 concurrent WebSocket connections; close unused tabs
+
+**"Too many requests" / HTTP 429**
+- Rate limit on auth or follow-up endpoints; wait and retry
+
+**DynamoDB table errors**
+- Tables auto-create on startup; ensure AWS credentials and region are correct in `.env`

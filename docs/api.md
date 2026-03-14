@@ -1,6 +1,41 @@
-# WebSocket API Reference
+# API Reference
 
-## Endpoint
+## HTTP Endpoints
+
+### Auth
+
+| Method | Path | Body | Auth | Response |
+|--------|------|------|------|----------|
+| POST | `/auth/signup` | `{email, password, display_name?}` | No | `AuthResponse` |
+| POST | `/auth/login` | `{email, password}` | No | `AuthResponse` |
+| GET | `/auth/me` | -- | Bearer token | `UserResponse` |
+
+### Dashboard
+
+| Method | Path | Auth | Response |
+|--------|------|------|----------|
+| GET | `/dashboard/reports` | Bearer token | `ReportSummaryItem[]` |
+| GET | `/dashboard/reports/{id}` | Bearer token | `ReportDetail` |
+| DELETE | `/dashboard/reports/{id}` | Bearer token | `{ok: true}` |
+| GET | `/dashboard/statements` | Bearer token | `StatementItem[]` |
+| DELETE | `/dashboard/statements/{id}` | Bearer token | `{ok: true}` |
+
+### Follow-up Chat
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| POST | `/analyze/follow-up` | `FollowUpRequest` | SSE stream |
+
+SSE events:
+```json
+{"type": "chunk", "text": "..."}
+{"type": "done", "full_text": "...", "podcast_script": "..."}
+{"type": "error", "message": "..."}
+```
+
+---
+
+## WebSocket Endpoint
 
 ```
 ws://localhost:8000/ws/analyze
@@ -27,13 +62,36 @@ Sent immediately after connection opens.
       "content": "<base64-encoded file bytes>"
     }
   ],
-  "language": "en"
+  "language": "en",
+  "token": "<optional JWT for authenticated users>",
+  "enc_key": "<optional base64 encryption key>"
 }
 ```
 
 - `files` - Array of files, each with `name` (string) and `content` (base64 string)
 - `language` - ISO 639-1 code. Supported: `en`, `es`, `fr`, `de`, `pt`, `it`, `ja`, `ko`, `zh`, `hi`, `ar`, `nl`, `pl`, `ru`
+- `token` - Optional Cognito JWT for authenticated sessions
+- `enc_key` - Optional base64 encryption key for statement storage
 - Supported file types: `.pdf`, `.csv`
+- Auth credentials go in the message body (not query params) to avoid server log exposure
+
+### `use_saved_statements`
+
+Sent to re-analyze previously saved statements (requires authentication).
+
+```json
+{
+  "type": "use_saved_statements",
+  "statement_ids": ["id1", "id2"],
+  "files": [],
+  "language": "en",
+  "token": "...",
+  "enc_key": "..."
+}
+```
+
+- `statement_ids` - Array of saved statement IDs to retrieve from S3
+- `files` - Optional array of additional new files to include
 
 ### `upload_files` (additional documents)
 
@@ -61,13 +119,13 @@ Sent when user declines a document request.
 }
 ```
 
-### `answer_question`
+### `answer`
 
 Sent in response to an `ask_question` server message.
 
 ```json
 {
-  "type": "answer_question",
+  "type": "answer",
   "answer": "I'm salaried, paid monthly"
 }
 ```
@@ -130,7 +188,7 @@ Agent is asking the user a multiple-choice question.
 }
 ```
 
-Client should respond with `answer_question`. The frontend adds an "Other" option automatically.
+Client should respond with `answer`. The frontend adds an "Other" option automatically.
 
 ### `report_ready`
 
@@ -170,7 +228,12 @@ Financial report is ready (sent before podcast generation).
         "income": 5000.00,
         "expenses": 3200.00
       }
-    ]
+    ],
+    "grounding": {
+      "sources": [{"uri": "...", "title": "...", "domain": "..."}],
+      "citations": [{"text_segment": "...", "source_indices": [0]}],
+      "search_entry_point_html": "..."
+    }
   }
 }
 ```
@@ -195,12 +258,14 @@ Final result with podcast script and optional audio.
       "start": 0.85,
       "end": 2.1
     }
-  ]
+  ],
+  "report_id": "<optional, present for authenticated users>"
 }
 ```
 
 - `audio_base64` is `null` if ElevenLabs TTS fails (fallback to script-only mode)
 - `sentences` contains timing data for synchronized highlighting during playback
+- `report_id` is included for authenticated users so the frontend can link to the saved report
 
 ### `error`
 
@@ -214,13 +279,15 @@ Final result with podcast script and optional audio.
 ## Connection Lifecycle
 
 1. Client opens WebSocket to `/ws/analyze`
-2. Server accepts, creates session
-3. Client sends `upload_files` with initial files
-4. Server streams `progress`, `thinking`, `request_documents`, `ask_question` messages
-5. Client responds to agent interactions as needed
-6. Server sends `report_ready` (report available to display)
-7. Server sends `podcast_audio_ready` (final result)
-8. Connection closes
+2. Server enforces per-IP connection limit (max 5), accepts, creates session
+3. Client sends `upload_files` or `use_saved_statements` with initial data
+4. Server validates auth token if provided
+5. Server streams `progress`, `thinking`, `request_documents`, `ask_question` messages
+6. Client responds to agent interactions as needed
+7. Server sends `report_ready` (report available to display)
+8. Server sends `podcast_audio_ready` (final result)
+9. For authenticated users, report and statements are saved to DynamoDB/S3
+10. Connection closes
 
 ## Error Handling
 
@@ -228,3 +295,7 @@ Final result with podcast script and optional audio.
 - Gemini failures return an `error` message
 - ElevenLabs TTS failures fall back to script-only (no error to client)
 - WebSocket disconnects are logged and session is cleaned up
+- Per-IP WebSocket connection limit exceeded: close code 4029
+- Invalid/expired auth token: error message and close code 4001
+- File size (10MB) and file count (10) limits enforced; violations return error message
+- Analysis timeout (default 300s) returns error message

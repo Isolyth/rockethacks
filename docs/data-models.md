@@ -8,7 +8,7 @@ Backend models (Pydantic) and frontend interfaces (TypeScript) are kept in sync 
 
 ---
 
-## Models
+## Financial Models
 
 ### FinancialReport
 
@@ -21,6 +21,7 @@ Top-level report returned by the Gemini agent.
 | `top_merchants` | `MerchantSummary[]` | Highest-spend merchants |
 | `insights` | `string[]` | AI-generated financial insights |
 | `monthly_trend` | `MonthlyTrend[]` | Month-by-month income vs expenses |
+| `grounding` | `GroundingData?` | Web search sources and citations (null if no search) |
 
 ### FinancialSummary
 
@@ -63,12 +64,136 @@ Top-level report returned by the Gemini agent.
 | `document_type` | `string` | Type of document needed |
 | `reason` | `string` | Why it would improve analysis |
 
-### AnalysisResult
+---
+
+## Grounding Models
+
+### GroundingSource
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `report` | `FinancialReport` | The financial report |
+| `uri` | `string` | Source URL |
+| `title` | `string?` | Page title |
+| `domain` | `string?` | Domain name |
+
+### GroundingCitation
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `text_segment` | `string` | Cited text |
+| `source_indices` | `int[]` | Indices into sources array |
+
+### GroundingData
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sources` | `GroundingSource[]` | Web sources used |
+| `citations` | `GroundingCitation[]` | Text citations with source references |
+| `search_entry_point_html` | `string?` | Google search widget HTML |
+
+---
+
+## Auth Models
+
+### SignupRequest
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `email` | `string` | User email (validated, lowercased) |
+| `password` | `string` | Min 8 chars |
+| `display_name` | `string?` | Optional display name |
+
+### LoginRequest
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `email` | `string` | |
+| `password` | `string` | |
+
+### UserResponse
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Cognito user sub |
+| `email` | `string` | |
+| `display_name` | `string` | |
+
+### AuthResponse
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `token` | `string` | Cognito access token |
+| `user` | `UserResponse` | User info |
+| `encryption_key` | `string?` | Base64 AES-256 key (derived from password) |
+
+---
+
+## Dashboard Models
+
+### ReportSummaryItem
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Report ID |
+| `title` | `string` | e.g. "2024-01 to 2024-03 Analysis" |
+| `created_at` | `string` | ISO 8601 timestamp |
+| `language` | `string` | ISO 639-1 code |
+| `total_income` | `float` | |
+| `total_expenses` | `float` | |
+| `net_savings` | `float` | |
+
+### ReportDetail
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | |
+| `title` | `string` | |
+| `created_at` | `string` | |
+| `language` | `string` | |
+| `report` | `FinancialReport` | Full report data |
 | `podcast_script` | `string` | Generated podcast script |
+| `audio_url` | `string?` | Presigned S3 URL for audio |
+| `sentences` | `PodcastSentence[]` | Sentence timing for sync |
+| `statements` | `{id, filename, file_type}[]` | Associated statements |
+
+### StatementItem
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Statement ID |
+| `filename` | `string` | Original filename |
+| `uploaded_at` | `string` | ISO 8601 timestamp |
+| `file_type` | `string` | "pdf" or "csv" |
+| `file_size` | `int` | Size in bytes |
+
+---
+
+## Follow-up Models
+
+### ChatMessage
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `role` | `string` | "user" or "assistant" |
+| `content` | `string` | Message text |
+
+### FollowUpRequest
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `report_data` | `dict` | Original FinancialReport as dict |
+| `prompt` | `string` | User's follow-up question |
+| `history` | `ChatMessage[]` | Previous conversation turns |
+| `language` | `string` | Default "en" |
+
+### FollowUpResponse
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `message` | `string` | AI response text |
+| `podcast_script` | `string?` | Follow-up podcast script |
+
+---
 
 ## Frontend-Only Types
 

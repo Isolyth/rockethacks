@@ -7,11 +7,14 @@ A full-stack financial analysis app that uses Google's Gemini AI to analyze bank
 - **Frontend**: SvelteKit, TypeScript, Vite
 - **Backend**: Python, FastAPI, Uvicorn
 - **AI**: Google Gemini API
+- **Auth**: AWS Cognito (optional)
+- **Storage**: DynamoDB + S3 (optional)
 
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) (v18+)
-- [Python](https://www.python.org/) (3.10+)
+- [Python](https://www.python.org/) (3.12)
+- AWS account (optional - only needed for user accounts and report persistence)
 
 ## Getting Started
 
@@ -37,13 +40,16 @@ Create a `.env` file in the `backend/` directory:
 cp .env.example .env
 ```
 
-Then open `.env` and add your Gemini API key:
+Then open `.env` and add your API keys:
 
 ```
 GEMINI_API_KEY=your-gemini-api-key-here
+ELEVENLABS_API_KEY=your-elevenlabs-api-key-here  # optional
 ```
 
-You can get an API key from [Google AI Studio](https://aistudio.google.com/apikey).
+You can get a Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey).
+
+For user accounts and persistence, add AWS/Cognito configuration. See `backend/.env.example` for all available variables.
 
 ### 3. Set up the frontend
 
@@ -75,10 +81,13 @@ Open http://localhost:5173 in your browser.
 
 ## Usage
 
-1. Upload one or more bank statements (PDF or CSV)
-2. Wait for the AI to parse and analyze your financial data
-3. View your financial report with income/expense breakdowns, top merchants, and insights
-4. Read or copy the generated podcast script summarizing your finances
+1. Sign up for an account or continue as a guest
+2. Upload one or more bank statements (PDF or CSV), or re-analyze saved statements
+3. The AI parses your data, asks clarifying questions, and optionally searches the web for context
+4. View your financial report with income/expense breakdowns, top merchants, insights, and grounding sources
+5. Listen to or read the generated podcast summarizing your finances
+6. Ask follow-up questions via the advisor chat
+7. View past reports on the dashboard (authenticated users)
 
 ## Building for Production
 
@@ -87,3 +96,15 @@ cd frontend
 npm run build
 npm run preview   # preview the production build
 ```
+
+### Docker Deployment
+
+```sh
+# Set env vars for frontend build
+export VITE_API_URL=https://your-domain.com
+export VITE_WS_URL=wss://your-domain.com/ws/analyze
+
+docker compose up -d --build
+```
+
+Services: backend (port 8000), frontend (port 3000), nginx (80/443 with Let's Encrypt), certbot (auto-renewal).

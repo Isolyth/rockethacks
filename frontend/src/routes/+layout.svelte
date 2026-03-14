@@ -39,8 +39,9 @@
 					>
 					<span class="user-name">{auth.user?.display_name}</span>
 					<button class="nav-btn" onclick={handleLogout}>Log Out</button>
-				{:else if currentPath !== '/'}
+				{:else}
 					<a href="/login" class="nav-link">Log In</a>
+					<a href="/signup" class="nav-link signup-link">Sign Up</a>
 				{/if}
 			</nav>
 		</div>
@@ -106,6 +107,20 @@
 	.user-name {
 		font-size: 0.875rem;
 		color: var(--color-text-muted);
+	}
+
+	.signup-link {
+		background: var(--gradient-gold-btn);
+		color: #0a0a0f !important;
+		font-weight: 600;
+		border: 2px solid var(--color-gold-border);
+		box-shadow: var(--gold-btn-shadow);
+	}
+
+	.signup-link:hover {
+		filter: brightness(1.15);
+		background: var(--gradient-gold-btn);
+		color: #0a0a0f;
 	}
 
 	.nav-btn {
