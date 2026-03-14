@@ -130,9 +130,16 @@
 
 	.bar-fill {
 		height: 100%;
-		background: var(--gradient-gold-btn);
 		border-radius: 4px;
 		transition: width 0.4s ease;
+		background: linear-gradient(135deg, #B9822C 0%, #F6E27A 15%, #D5A629 30%, #F6D767 45%, #B9822C 60%, #F6E27A 75%, #D5A629 90%, #F6D767 100%);
+		background-size: 200% 100%;
+		animation: shimmer 2s linear infinite;
+	}
+
+	@keyframes shimmer {
+		0% { background-position: 200% 0; }
+		100% { background-position: 0 0; }
 	}
 
 	.status-message {
