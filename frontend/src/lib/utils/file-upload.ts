@@ -17,10 +17,22 @@ export function handleFileSelect(e: Event, addFiles: (files: File[]) => void): v
 	}
 }
 
-export function filterValidFiles(newFiles: File[]): File[] {
-	return newFiles.filter(
-		(f) => f.name.toLowerCase().endsWith('.pdf') || f.name.toLowerCase().endsWith('.csv')
-	);
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+export function filterValidFiles(newFiles: File[]): { valid: File[]; rejected: string[] } {
+	const valid: File[] = [];
+	const rejected: string[] = [];
+	for (const f of newFiles) {
+		const ext = f.name.toLowerCase();
+		if (!ext.endsWith('.pdf') && !ext.endsWith('.csv')) {
+			rejected.push(`${f.name}: unsupported file type`);
+		} else if (f.size > MAX_FILE_SIZE_BYTES) {
+			rejected.push(`${f.name}: exceeds 10 MB limit`);
+		} else {
+			valid.push(f);
+		}
+	}
+	return { valid, rejected };
 }
 
 export function formatSize(bytes: number): string {

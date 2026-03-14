@@ -25,8 +25,12 @@
 	let dragging = $state(false);
 	let fileInput: HTMLInputElement;
 
+	let fileWarning = $state('');
+
 	function addFiles(newFiles: File[]) {
-		files = [...files, filterValidFiles(newFiles)].flat();
+		const { valid, rejected } = filterValidFiles(newFiles);
+		files = [...files, ...valid];
+		fileWarning = rejected.length > 0 ? rejected.join(', ') : '';
 	}
 
 	function removeFile(index: number) {
@@ -77,6 +81,10 @@
 		onchange={(e) => onFileSelect(e, addFiles)}
 		hidden
 	/>
+
+	{#if fileWarning}
+		<p class="file-warning">{fileWarning}</p>
+	{/if}
 
 	{#if files.length > 0}
 		<div class="file-list">
@@ -239,5 +247,14 @@
 
 	.analyze-btn:hover {
 		background: var(--color-primary-light);
+	}
+
+	.file-warning {
+		color: var(--color-warning, #fbbf24);
+		font-size: 0.85rem;
+		padding: 0.5rem 0.75rem;
+		background: rgba(251, 191, 36, 0.1);
+		border-radius: var(--radius-sm);
+		margin: 0;
 	}
 </style>

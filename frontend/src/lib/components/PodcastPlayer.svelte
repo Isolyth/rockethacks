@@ -91,6 +91,14 @@
 		return `${m}:${sec.toString().padStart(2, '0')}`;
 	}
 
+	function downloadMp3() {
+		if (!resolvedAudioUrl) return;
+		const a = document.createElement('a');
+		a.href = resolvedAudioUrl;
+		a.download = 'podcast.mp3';
+		a.click();
+	}
+
 	// Fallback: split by paragraphs when no sentence data
 	let paragraphs = $derived(podcastScript.split('\n\n').filter((p) => p.trim()));
 </script>
@@ -170,6 +178,14 @@
 			/>
 
 			<span class="time">{formatTime(duration)}</span>
+
+			<button class="download-btn" onclick={downloadMp3} type="button" title="Download MP3">
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+					<polyline points="7 10 12 15 17 10" />
+					<line x1="12" y1="15" x2="12" y2="3" />
+				</svg>
+			</button>
 		</div>
 	{:else}
 		<div class="no-audio">
@@ -294,6 +310,26 @@
 		background: var(--color-primary);
 		cursor: pointer;
 		border: none;
+	}
+
+	.download-btn {
+		width: 36px;
+		height: 36px;
+		border-radius: 50%;
+		border: 1px solid var(--color-border);
+		background: transparent;
+		color: var(--color-text-muted);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		cursor: pointer;
+		transition: color 0.2s, border-color 0.2s;
+	}
+
+	.download-btn:hover {
+		color: var(--color-primary);
+		border-color: var(--color-primary);
 	}
 
 	.no-audio {

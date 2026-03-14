@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+import re
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class CategoryBreakdown(BaseModel):
@@ -67,8 +69,15 @@ class DocumentRequest(BaseModel):
 
 class SignupRequest(BaseModel):
     email: str
-    password: str
+    password: str = Field(min_length=8)
     display_name: str | None = None
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", v):
+            raise ValueError("Invalid email format")
+        return v.lower().strip()
 
 
 class LoginRequest(BaseModel):

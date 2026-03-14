@@ -1,4 +1,5 @@
 <script lang="ts">
+	import DOMPurify from "isomorphic-dompurify";
 	import type { FinancialReport } from "$lib/types";
 
 	let { report }: { report: FinancialReport } = $props();
@@ -135,7 +136,7 @@
 
 	{#if report.grounding?.search_entry_point_html}
 		<section class="section search-entry-point">
-			{@html report.grounding.search_entry_point_html}
+			{@html DOMPurify.sanitize(report.grounding.search_entry_point_html)}
 		</section>
 	{/if}
 </div>

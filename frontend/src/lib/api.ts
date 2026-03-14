@@ -89,7 +89,7 @@ export async function fetchReports(token: string): Promise<ReportSummaryItem[]> 
 }
 
 export async function fetchReport(token: string, reportId: string): Promise<ReportDetail> {
-	const resp = await apiFetch(`/dashboard/reports/${reportId}`, {
+	const resp = await apiFetch(`/dashboard/reports/${encodeURIComponent(reportId)}`, {
 		headers: authHeaders(token)
 	});
 	if (!resp.ok) throw new Error('Failed to fetch report');
@@ -103,7 +103,7 @@ export async function fetchStatements(token: string): Promise<StatementItem[]> {
 }
 
 export async function deleteReport(token: string, reportId: string): Promise<void> {
-	const resp = await apiFetch(`/dashboard/reports/${reportId}`, {
+	const resp = await apiFetch(`/dashboard/reports/${encodeURIComponent(reportId)}`, {
 		method: 'DELETE',
 		headers: authHeaders(token)
 	});
@@ -111,7 +111,7 @@ export async function deleteReport(token: string, reportId: string): Promise<voi
 }
 
 export async function deleteStatement(token: string, statementId: string): Promise<void> {
-	const resp = await apiFetch(`/dashboard/statements/${statementId}`, {
+	const resp = await apiFetch(`/dashboard/statements/${encodeURIComponent(statementId)}`, {
 		method: 'DELETE',
 		headers: authHeaders(token)
 	});
@@ -136,42 +136,43 @@ interface AnalysisOptions {
 }
 
 export function startAnalysis(opts: AnalysisOptions): AnalysisHandle {
-	const baseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/analyze';
-	let wsUrl = baseUrl;
-	if (opts.token) {
-		wsUrl += `?token=${opts.token}`;
-		if (opts.encryptionKey) {
-			wsUrl += `&enc_key=${encodeURIComponent(opts.encryptionKey)}`;
-		}
-	}
-	const ws = new WebSocket(wsUrl);
+	// Auto-detect protocol: use wss/https in production, ws/http locally
+	const wsProtocol =
+		typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+	const baseUrl = import.meta.env.VITE_WS_URL || `${wsProtocol}//localhost:8000/ws/analyze`;
+
+	// No credentials in URL — they go in the first message body
+	const ws = new WebSocket(baseUrl);
 	let open = false;
 
 	ws.onopen = async () => {
 		open = true;
 		try {
-			if (opts.savedStatementIds && opts.savedStatementIds.length > 0) {
-				// Use saved statements flow
-				const newFiles =
-					opts.files.length > 0 ? await filesToPayload(opts.files) : undefined;
-				ws.send(
-					JSON.stringify({
-						type: 'use_saved_statements',
-						statement_ids: opts.savedStatementIds,
-						files: newFiles,
-						language: opts.language
-					})
-				);
-			} else {
-				const payload = await filesToPayload(opts.files);
-				ws.send(
-					JSON.stringify({
-						type: 'upload_files',
-						files: payload,
-						language: opts.language
-					})
-				);
+			// Build the message with auth credentials in body
+			const message: Record<string, unknown> = {
+				language: opts.language
+			};
+
+			// Include auth token and encryption key in message body
+			if (opts.token) {
+				message.token = opts.token;
+				if (opts.encryptionKey) {
+					message.enc_key = opts.encryptionKey;
+				}
 			}
+
+			if (opts.savedStatementIds && opts.savedStatementIds.length > 0) {
+				message.type = 'use_saved_statements';
+				message.statement_ids = opts.savedStatementIds;
+				if (opts.files.length > 0) {
+					message.files = await filesToPayload(opts.files);
+				}
+			} else {
+				message.type = 'upload_files';
+				message.files = await filesToPayload(opts.files);
+			}
+
+			ws.send(JSON.stringify(message));
 		} catch {
 			opts.onError('Failed to read files');
 		}
@@ -203,8 +204,8 @@ export function startAnalysis(opts: AnalysisOptions): AnalysisHandle {
 					opts.onError(data.message);
 					break;
 			}
-		} catch (e) {
-			console.warn('Malformed WebSocket message:', e);
+		} catch {
+			// Silently ignore malformed messages in production
 		}
 	};
 

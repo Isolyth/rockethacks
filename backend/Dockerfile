@@ -6,7 +6,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
-RUN rm -rf tests/ venv/ __pycache__/ .pytest_cache/ .env .env.example
 
 EXPOSE 8000
 

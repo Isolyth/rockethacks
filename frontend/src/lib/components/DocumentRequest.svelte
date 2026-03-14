@@ -15,7 +15,8 @@
 	let fileInput: HTMLInputElement;
 
 	function addFiles(newFiles: File[]) {
-		files = [...files, filterValidFiles(newFiles)].flat();
+		const { valid } = filterValidFiles(newFiles);
+		files = [...files, ...valid];
 	}
 
 	function removeFile(index: number) {

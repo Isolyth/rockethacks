@@ -2,13 +2,27 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
+from config import AUTH_RATE_LIMIT_REQUESTS, AUTH_RATE_LIMIT_WINDOW
 from models.schemas import AuthResponse, LoginRequest, SignupRequest, UserResponse
 from services.auth import cognito_login, cognito_signup, get_user_from_token
+from services.rate_limit import RateLimiter
 
 logger = logging.getLogger("uvicorn.error")
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+_auth_limiter = RateLimiter(
+    max_requests=AUTH_RATE_LIMIT_REQUESTS,
+    window_seconds=AUTH_RATE_LIMIT_WINDOW,
+)
+
+
+def _check_rate_limit(request: Request):
+    """Raise 429 if client IP exceeds auth rate limit."""
+    client_ip = request.client.host if request.client else "unknown"
+    if not _auth_limiter.is_allowed(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
 
 
 async def get_current_user(authorization: str = Header(...)) -> dict:
@@ -24,7 +38,8 @@ async def get_current_user(authorization: str = Header(...)) -> dict:
 
 
 @router.post("/signup", response_model=AuthResponse)
-async def signup(req: SignupRequest):
+async def signup(req: SignupRequest, request: Request):
+    _check_rate_limit(request)
     try:
         result = await cognito_signup(
             req.email, req.password, req.display_name or ""
@@ -46,7 +61,8 @@ async def signup(req: SignupRequest):
 
 
 @router.post("/login", response_model=AuthResponse)
-async def login(req: LoginRequest):
+async def login(req: LoginRequest, request: Request):
+    _check_rate_limit(request)
     try:
         result = await cognito_login(req.email, req.password)
     except Exception as e:

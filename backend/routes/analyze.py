@@ -8,6 +8,13 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from config import (
+    MAX_FILE_SIZE_BYTES,
+    MAX_FILES_PER_UPLOAD,
+    MAX_TEXT_LENGTH,
+    MAX_WS_CONNECTIONS_PER_IP,
+    WS_RECEIVE_TIMEOUT,
+)
 from services.parser import parse_pdf, parse_csv
 from services.gemini import analyze_with_gemini_agent, generate_podcast_script
 from services.elevenlabs_tts import generate_podcast_audio
@@ -16,6 +23,7 @@ from services.auth import get_user_from_token
 from services.dynamo import save_report, save_statement, get_statement
 from services.encryption import encrypt_bytes, decrypt_bytes
 from services.storage import upload_statement, upload_audio, get_statement_bytes
+from services.rate_limit import track_ws_connection, release_ws_connection
 from models.schemas import FinancialReport
 
 logger = logging.getLogger("uvicorn.error")
@@ -31,6 +39,19 @@ async def send_progress(ws: WebSocket, step: str, message: str, percent: int):
     await send_json(ws, {"type": "progress", "step": step, "message": message, "percent": percent})
 
 
+async def _receive_json(ws: WebSocket) -> dict:
+    """Receive and parse a JSON message with timeout."""
+    raw = await asyncio.wait_for(ws.receive_text(), timeout=WS_RECEIVE_TIMEOUT)
+    return json.loads(raw)
+
+
+def _get_client_ip(ws: WebSocket) -> str:
+    """Extract client IP from WebSocket connection."""
+    if ws.client:
+        return ws.client.host
+    return "unknown"
+
+
 def parse_file_data(name: str, content_bytes: bytes) -> str | None:
     """Parse a file's bytes into text. Returns None if unsupported type."""
     lower = name.lower()
@@ -38,6 +59,20 @@ def parse_file_data(name: str, content_bytes: bytes) -> str | None:
         return parse_pdf(content_bytes)
     elif lower.endswith(".csv"):
         return parse_csv(content_bytes)
+    return None
+
+
+def _validate_files(files: list[dict]) -> str | None:
+    """Validate file count and sizes. Returns error message or None."""
+    if len(files) > MAX_FILES_PER_UPLOAD:
+        return f"Too many files. Maximum is {MAX_FILES_PER_UPLOAD}."
+    for f in files:
+        content = f.get("content", "")
+        # base64 is ~4/3 the size of the raw data
+        estimated_size = len(content) * 3 // 4
+        if estimated_size > MAX_FILE_SIZE_BYTES:
+            max_mb = MAX_FILE_SIZE_BYTES // (1024 * 1024)
+            return f"File '{f['name']}' exceeds the {max_mb} MB size limit."
     return None
 
 
@@ -131,35 +166,39 @@ async def _parse_and_save_files(files: list[dict], user_id: str | None,
 
 @router.websocket("/ws/analyze")
 async def ws_analyze(ws: WebSocket):
+    client_ip = _get_client_ip(ws)
+
+    # Enforce per-IP connection limit
+    if not track_ws_connection(client_ip, MAX_WS_CONNECTIONS_PER_IP):
+        await ws.close(code=4029, reason="Too many connections")
+        return
+
     await ws.accept()
     session_id = uuid.uuid4().hex
     session = Session(session_id=session_id)
     sessions[session_id] = session
 
-    # Authenticate if token provided
-    token = ws.query_params.get("token")
-    if token:
-        user_info = await get_user_from_token(token)
-        if user_info is None:
-            await send_json(ws, {"type": "error", "message": "Invalid or expired token"})
-            await ws.close(code=4001, reason="Invalid token")
-            sessions.pop(session_id, None)
-            return
-        session.user_id = user_info["id"]
-        # Encryption key for statement storage
-        enc_key_b64 = ws.query_params.get("enc_key")
-        if enc_key_b64:
-            session.encryption_key = base64.b64decode(enc_key_b64)
-        logger.info(f"Authenticated WebSocket session for user {session.user_id}")
-
     try:
-        # Step 1: Receive initial message from client
-        raw = await ws.receive_text()
+        # Step 1: Receive initial message (includes auth credentials in body)
         try:
-            msg = json.loads(raw)
-        except json.JSONDecodeError:
-            await send_json(ws, {"type": "error", "message": "Invalid message format"})
+            msg = await _receive_json(ws)
+        except (json.JSONDecodeError, asyncio.TimeoutError):
+            await send_json(ws, {"type": "error", "message": "Invalid or missing initial message"})
             return
+
+        # Authenticate from message body (not query params)
+        token = msg.get("token")
+        if token:
+            user_info = await get_user_from_token(token)
+            if user_info is None:
+                await send_json(ws, {"type": "error", "message": "Invalid or expired token"})
+                await ws.close(code=4001, reason="Invalid token")
+                return
+            session.user_id = user_info["id"]
+            enc_key_b64 = msg.get("enc_key")
+            if enc_key_b64:
+                session.encryption_key = base64.b64decode(enc_key_b64)
+            logger.info(f"Authenticated WebSocket session for user {session.user_id}")
 
         t0 = time.time()
         language = msg.get("language", "en")
@@ -176,6 +215,13 @@ async def ws_analyze(ws: WebSocket):
 
             saved_ids = msg.get("statement_ids", [])
             new_files = msg.get("files", [])
+
+            # Validate new files if any
+            if new_files:
+                file_error = _validate_files(new_files)
+                if file_error:
+                    await send_json(ws, {"type": "error", "message": file_error})
+                    return
 
             logger.info(f"=== WS /ws/analyze with {len(saved_ids)} saved + {len(new_files)} new file(s) lang={language} ===")
             await send_progress(ws, "parsing", "Loading saved statements...", 10)
@@ -213,6 +259,13 @@ async def ws_analyze(ws: WebSocket):
 
         elif msg_type == "upload_files" and msg.get("files"):
             files = msg["files"]
+
+            # Validate file count and sizes
+            file_error = _validate_files(files)
+            if file_error:
+                await send_json(ws, {"type": "error", "message": file_error})
+                return
+
             file_names = [f["name"] for f in files]
             logger.info(f"=== WS /ws/analyze with {len(files)} file(s): {file_names} lang={language} ===")
 
@@ -235,6 +288,11 @@ async def ws_analyze(ws: WebSocket):
         if not all_text.strip():
             await send_json(ws, {"type": "error", "message": "No text could be extracted from the files"})
             return
+
+        # Truncate text to prevent excessive API costs
+        if len(all_text) > MAX_TEXT_LENGTH:
+            logger.warning(f"Truncating text from {len(all_text)} to {MAX_TEXT_LENGTH} chars")
+            all_text = all_text[:MAX_TEXT_LENGTH]
 
         logger.info(f"[1/5] Parsing done. Total text: {len(all_text)} chars ({time.time() - t0:.1f}s)")
         await send_progress(ws, "parsing", "Files parsed successfully", 25)
@@ -263,17 +321,22 @@ async def ws_analyze(ws: WebSocket):
                     "reason": event_data["reason"],
                 })
 
-                # Wait for client response
-                raw_resp = await ws.receive_text()
+                # Wait for client response (with timeout)
                 try:
-                    resp_msg = json.loads(raw_resp)
-                except json.JSONDecodeError:
-                    await send_json(ws, {"type": "error", "message": "Invalid message format"})
+                    resp_msg = await _receive_json(ws)
+                except (json.JSONDecodeError, asyncio.TimeoutError):
+                    await send_json(ws, {"type": "error", "message": "Invalid response or timeout"})
                     return
 
                 if resp_msg.get("type") == "upload_files" and resp_msg.get("files"):
+                    new_files = resp_msg["files"]
+                    file_error = _validate_files(new_files)
+                    if file_error:
+                        await send_json(ws, {"type": "error", "message": file_error})
+                        return
+
                     new_parts = []
-                    for f in resp_msg["files"]:
+                    for f in new_files:
                         name = f["name"]
                         content_bytes = base64.b64decode(f["content"])
                         text = parse_file_data(name, content_bytes)
@@ -305,12 +368,11 @@ async def ws_analyze(ws: WebSocket):
                     "options": event_data["options"],
                 })
 
-                # Wait for client answer
-                raw_resp = await ws.receive_text()
+                # Wait for client answer (with timeout)
                 try:
-                    resp_msg = json.loads(raw_resp)
-                except json.JSONDecodeError:
-                    await send_json(ws, {"type": "error", "message": "Invalid message format"})
+                    resp_msg = await _receive_json(ws)
+                except (json.JSONDecodeError, asyncio.TimeoutError):
+                    await send_json(ws, {"type": "error", "message": "Invalid response or timeout"})
                     return
 
                 answer = resp_msg.get("answer", "No answer provided")
@@ -396,12 +458,19 @@ async def ws_analyze(ws: WebSocket):
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected (session {session_id})")
+    except asyncio.TimeoutError:
+        logger.info(f"WebSocket timed out (session {session_id})")
+        try:
+            await send_json(ws, {"type": "error", "message": "Connection timed out"})
+        except Exception:
+            pass
     except Exception as e:
         logger.error(f"Error during analysis: {type(e).__name__}: {e}", exc_info=True)
         try:
-            await send_json(ws, {"type": "error", "message": str(e)})
+            await send_json(ws, {"type": "error", "message": "An internal error occurred. Please try again."})
         except Exception:
             pass
     finally:
         session.active = False
         sessions.pop(session_id, None)
+        release_ws_connection(client_ip)

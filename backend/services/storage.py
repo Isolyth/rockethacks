@@ -24,12 +24,22 @@ def _get_s3():
     return _s3_client
 
 
+def _sanitize_filename(filename: str) -> str:
+    """Strip path components and restrict to safe characters."""
+    import os
+    import re
+    name = os.path.basename(filename)
+    name = re.sub(r"[^a-zA-Z0-9._-]", "_", name)
+    return name[:255] or "file"
+
+
 async def upload_statement(user_id: str, statement_id: str, filename: str, content_bytes: bytes) -> str | None:
     """Upload a statement file to S3. Returns the S3 key or None if S3 not configured."""
     s3 = _get_s3()
     if s3 is None:
         return None
-    key = f"users/{user_id}/statements/{statement_id}_{filename}"
+    safe_name = _sanitize_filename(filename)
+    key = f"users/{user_id}/statements/{statement_id}_{safe_name}"
     await asyncio.to_thread(
         s3.put_object, Bucket=AWS_S3_BUCKET, Key=key, Body=content_bytes
     )
