@@ -17,6 +17,7 @@
 	} from '$lib/types';
 
 	let appState = $state<AppState>('idle');
+	let userState = $state<'unauthenticated' | 'authenticated' | 'guest'>('unauthenticated');
 	let progress = $state<ProgressEvent>({ step: 'parsing', message: '', percent: 0 });
 	let report = $state<FinancialReport | null>(null);
 	let podcastAudio = $state<PodcastAudio | null>(null);
@@ -110,9 +111,33 @@
 	<title>Easy monAI - Bank Statement Analyzer</title>
 </svelte:head>
 
+<header class="app-header">
+	<div class="header-content">
+		<div class="logo">StatementPod</div>
+		<div class="user-status">
+			{#if userState === 'unauthenticated'}
+				<button class="login-btn-small" onclick={() => userState = 'authenticated'}>Login</button>
+			{:else if userState === 'authenticated'}
+				<span class="status-text">Logged In</span>
+			{:else if userState === 'guest'}
+				<span class="status-text">Guest Mode</span>
+			{/if}
+		</div>
+	</div>
+</header>
+
 <main>
 	<div class="content">
-		{#if appState === 'idle'}
+		{#if userState === 'unauthenticated'}
+			<div class="hero">
+				<h1>StatementPod</h1>
+				<p class="tagline">Your financial life, analyzed and narrated by AI</p>
+				<div class="hero-actions">
+					<button class="primary-btn" onclick={() => userState = 'authenticated'}>Log In / Sign Up</button>
+					<button class="ghost-btn" onclick={() => userState = 'guest'}>Continue as Guest</button>
+				</div>
+			</div>
+		{:else if appState === 'idle'}
 			<FileUpload onupload={handleUpload} />
 		{:else if appState === 'awaiting_documents' && documentRequest}
 			<ProgressBar {progress} />
@@ -163,6 +188,126 @@
 </main>
 
 <style>
+	.app-header {
+		position: sticky;
+		top: 0;
+		width: 100%;
+		background: var(--color-surface);
+		border-bottom: 1px solid var(--color-border);
+		z-index: 100;
+	}
+
+	.header-content {
+		max-width: 1400px;
+		margin: 0 auto;
+		padding: 1rem 1.5rem;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.logo {
+		font-weight: 700;
+		font-size: 1.25rem;
+		color: var(--color-text);
+	}
+
+	.login-btn-small {
+		padding: 0.5rem 1rem;
+		background: transparent;
+		color: var(--color-text);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.875rem;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.login-btn-small:hover {
+		border-color: var(--color-primary);
+	}
+
+	.status-text {
+		font-size: 0.875rem;
+		color: var(--color-text-muted);
+	}
+
+	.hero {
+		text-align: center;
+		padding: 4rem 1rem;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1.5rem;
+		max-width: 600px;
+		margin: 0 auto;
+	}
+
+	.hero h1 {
+		font-size: 3.5rem;
+		font-weight: 800;
+		margin: 0;
+		background: linear-gradient(to right, var(--color-primary), #b366ff);
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+	}
+
+	.tagline {
+		font-size: 1.25rem;
+		color: var(--color-text-muted);
+		margin: 0;
+	}
+
+	.hero-actions {
+		display: flex;
+		gap: 1rem;
+		margin-top: 1rem;
+	}
+	
+	@media (max-width: 600px) {
+		.hero-actions {
+			flex-direction: column;
+			width: 100%;
+		}
+		
+		.hero-actions > button {
+			width: 100%;
+		}
+	}
+
+	.primary-btn {
+		padding: 0.875rem 1.5rem;
+		background: var(--color-primary);
+		color: white;
+		border: none;
+		border-radius: var(--radius-sm);
+		font-size: 1rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: opacity 0.2s;
+	}
+
+	.primary-btn:hover {
+		opacity: 0.9;
+	}
+
+	.ghost-btn {
+		padding: 0.875rem 1.5rem;
+		background: transparent;
+		color: var(--color-text);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 1rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.ghost-btn:hover {
+		background: var(--color-surface-2);
+		border-color: var(--color-text-muted);
+	}
+
 	main {
 		min-height: 100vh;
 		display: flex;
