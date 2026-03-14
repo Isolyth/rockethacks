@@ -83,6 +83,10 @@
 		hidden
 	/>
 
+	<p class="disclosure-text">
+		Note: Uploaded documents will be processed by a third-party AI service.
+	</p>
+
 	{#if files.length > 0}
 		<div class="file-list">
 			{#each files as file, i}
@@ -198,6 +202,13 @@
 		font-size: 0.8rem;
 		opacity: 0.6;
 		margin: 0;
+	}
+
+	.disclosure-text {
+		font-size: 0.8rem;
+		color: var(--color-text-muted);
+		text-align: center;
+		margin-top: -0.75rem;
 	}
 
 	.file-list {

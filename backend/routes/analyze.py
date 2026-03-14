@@ -2,6 +2,7 @@ import asyncio
 import base64
 import json
 import logging
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -14,9 +15,12 @@ from config import (
     MAX_TEXT_LENGTH,
     MAX_WS_CONNECTIONS_PER_IP,
     WS_RECEIVE_TIMEOUT,
+    GEMINI_ANALYSIS_TIMEOUT,
+    GEMINI_FOLLOWUP_CHAT_TIMEOUT,
+    GEMINI_FOLLOWUP_PODCAST_TIMEOUT,
 )
 from services.parser import parse_pdf, parse_csv
-from services.gemini import analyze_with_gemini_agent, generate_podcast_script
+from services.gemini import analyze_with_gemini_agent, generate_podcast_script, generate_followup_chat_stream, generate_followup_podcast_script
 from services.elevenlabs_tts import generate_podcast_audio
 from services.session import Session, sessions
 from services.auth import get_user_from_token
@@ -62,17 +66,42 @@ def parse_file_data(name: str, content_bytes: bytes) -> str | None:
     return None
 
 
+def sanitize_filename(filename: str) -> str:
+    """Sanitize filename to prevent path traversal and XSS."""
+    if not isinstance(filename, str):
+        filename = "unnamed"
+    # Keep only alphanumeric chars, dots, dashes, and underscores
+    clean_name = re.sub(r'[^a-zA-Z0-9.\-_]', '_', filename)
+    # Prevent directory traversal attempts
+    clean_name = clean_name.replace('..', '_')
+    # Prevent empty filename or just extension
+    if not clean_name or clean_name.startswith('.'):
+        clean_name = "unnamed_file" + (clean_name if '.' in clean_name else "")
+    # Restrict length
+    return clean_name[:255]
+
+
 def _validate_files(files: list[dict]) -> str | None:
-    """Validate file count and sizes. Returns error message or None."""
+    """Validate file count and strict binary sizes (via decode). Returns error message or None."""
     if len(files) > MAX_FILES_PER_UPLOAD:
         return f"Too many files. Maximum is {MAX_FILES_PER_UPLOAD}."
     for f in files:
-        content = f.get("content", "")
-        # base64 is ~4/3 the size of the raw data
-        estimated_size = len(content) * 3 // 4
-        if estimated_size > MAX_FILE_SIZE_BYTES:
-            max_mb = MAX_FILE_SIZE_BYTES // (1024 * 1024)
-            return f"File '{f['name']}' exceeds the {max_mb} MB size limit."
+        name = f.get("name", "unnamed")
+        content_str = f.get("content", "")
+        max_mb = MAX_FILE_SIZE_BYTES // (1024 * 1024)
+
+        # Quick reject for heavily bloated strings before attempting a full decode
+        if len(content_str) > MAX_FILE_SIZE_BYTES * 2:
+           return f"File '{name}' exceeds the {max_mb} MB size limit."
+
+        try:
+            # Decode to get actual size and validate valid base64
+            content_bytes = base64.b64decode(content_str, validate=True)
+            if len(content_bytes) > MAX_FILE_SIZE_BYTES:
+                return f"File '{name}' exceeds the {max_mb} MB size limit."
+        except Exception:
+            return f"File '{name}' contains invalid data encoding."
+            
     return None
 
 
@@ -165,7 +194,7 @@ async def _parse_and_save_files(files: list[dict], user_id: str | None,
 
 
 @router.websocket("/ws/analyze")
-async def ws_analyze(ws: WebSocket):
+async def ws_analyze(ws: WebSocket, token: str | None = None, enc_key: str | None = None):
     client_ip = _get_client_ip(ws)
 
     # Enforce per-IP connection limit
@@ -173,32 +202,34 @@ async def ws_analyze(ws: WebSocket):
         await ws.close(code=4029, reason="Too many connections")
         return
 
+    # Authenticate before accepting connection
+    user_info = None
+    if token:
+        user_info = await get_user_from_token(token)
+        if user_info is None:
+            await ws.close(code=4001, reason="Invalid token")
+            release_ws_connection(client_ip)
+            return
+
     await ws.accept()
     session_id = uuid.uuid4().hex
     session = Session(session_id=session_id)
+    
+    if user_info:
+        session.user_id = user_info["id"]
+        if enc_key:
+            session.encryption_key = base64.b64decode(enc_key)
+        logger.info(f"Authenticated WebSocket session for user {session.user_id}")
+        
     sessions[session_id] = session
 
     try:
-        # Step 1: Receive initial message (includes auth credentials in body)
+        # Step 1: Receive initial message
         try:
             msg = await _receive_json(ws)
         except (json.JSONDecodeError, asyncio.TimeoutError):
             await send_json(ws, {"type": "error", "message": "Invalid or missing initial message"})
             return
-
-        # Authenticate from message body (not query params)
-        token = msg.get("token")
-        if token:
-            user_info = await get_user_from_token(token)
-            if user_info is None:
-                await send_json(ws, {"type": "error", "message": "Invalid or expired token"})
-                await ws.close(code=4001, reason="Invalid token")
-                return
-            session.user_id = user_info["id"]
-            enc_key_b64 = msg.get("enc_key")
-            if enc_key_b64:
-                session.encryption_key = base64.b64decode(enc_key_b64)
-            logger.info(f"Authenticated WebSocket session for user {session.user_id}")
 
         t0 = time.time()
         language = msg.get("language", "en")
@@ -218,6 +249,8 @@ async def ws_analyze(ws: WebSocket):
 
             # Validate new files if any
             if new_files:
+                for f in new_files:
+                    f["name"] = sanitize_filename(f.get("name", "unnamed"))
                 file_error = _validate_files(new_files)
                 if file_error:
                     await send_json(ws, {"type": "error", "message": file_error})
@@ -259,6 +292,8 @@ async def ws_analyze(ws: WebSocket):
 
         elif msg_type == "upload_files" and msg.get("files"):
             files = msg["files"]
+            for f in files:
+                f["name"] = sanitize_filename(f.get("name", "unnamed"))
 
             # Validate file count and sizes
             file_error = _validate_files(files)
@@ -303,92 +338,107 @@ async def ws_analyze(ws: WebSocket):
 
         t1 = time.time()
         report_data = None
+        
+        # Generator wrapper to enforce total processing timeout
+        async def run_analysis_stream():
+            nonlocal report_data
+            async for event_type, event_data in analyze_with_gemini_agent(
+                all_text, file_count=file_count, session=session, language=language
+            ):
+                if event_type == "thinking":
+                    await send_json(ws, {
+                        "type": "thinking",
+                        "text": event_data,
+                    })
 
-        async for event_type, event_data in analyze_with_gemini_agent(
-            all_text, file_count=file_count, session=session, language=language
-        ):
-            if event_type == "thinking":
-                await send_json(ws, {
-                    "type": "thinking",
-                    "text": event_data,
-                })
+                elif event_type == "request_documents":
+                    logger.info(f"  Agent requesting: {event_data['document_type']}")
+                    await send_json(ws, {
+                        "type": "request_documents",
+                        "document_type": event_data["document_type"],
+                        "reason": event_data["reason"],
+                    })
 
-            elif event_type == "request_documents":
-                logger.info(f"  Agent requesting: {event_data['document_type']}")
-                await send_json(ws, {
-                    "type": "request_documents",
-                    "document_type": event_data["document_type"],
-                    "reason": event_data["reason"],
-                })
+                    # Wait for client response (with timeout)
+                    try:
+                        resp_msg = await _receive_json(ws)
+                    except (json.JSONDecodeError, asyncio.TimeoutError):
+                        await send_json(ws, {"type": "error", "message": "Invalid response or timeout"})
+                        raise asyncio.CancelledError() # Stop processing
 
-                # Wait for client response (with timeout)
-                try:
-                    resp_msg = await _receive_json(ws)
-                except (json.JSONDecodeError, asyncio.TimeoutError):
-                    await send_json(ws, {"type": "error", "message": "Invalid response or timeout"})
-                    return
+                    if resp_msg.get("type") == "upload_files" and resp_msg.get("files"):
+                        new_files = resp_msg["files"]
+                        for f in new_files:
+                            f["name"] = sanitize_filename(f.get("name", "unnamed"))
+                        file_error = _validate_files(new_files)
+                        if file_error:
+                            await send_json(ws, {"type": "error", "message": file_error})
+                            raise asyncio.CancelledError()
 
-                if resp_msg.get("type") == "upload_files" and resp_msg.get("files"):
-                    new_files = resp_msg["files"]
-                    file_error = _validate_files(new_files)
-                    if file_error:
-                        await send_json(ws, {"type": "error", "message": file_error})
-                        return
+                        new_parts = []
+                        for f in new_files:
+                            name = f["name"]
+                            content_bytes = base64.b64decode(f["content"])
+                            text = parse_file_data(name, content_bytes)
+                            if text:
+                                new_parts.append(f"\n--- {name} ---\n{text}")
+                                logger.info(f"  Additional file: {name} ({len(text)} chars)")
 
-                    new_parts = []
-                    for f in new_files:
-                        name = f["name"]
-                        content_bytes = base64.b64decode(f["content"])
-                        text = parse_file_data(name, content_bytes)
-                        if text:
-                            new_parts.append(f"\n--- {name} ---\n{text}")
-                            logger.info(f"  Additional file: {name} ({len(text)} chars)")
+                                # Save additional files for authenticated users
+                                if session.user_id:
+                                    try:
+                                        sid = await _save_statement_to_aws(session.user_id, name, content_bytes, session.encryption_key)
+                                        if sid:
+                                            statement_ids.append(sid)
+                                    except Exception as e:
+                                        logger.error(f"Failed to save additional statement: {e}")
 
-                            # Save additional files for authenticated users
-                            if session.user_id:
-                                try:
-                                    sid = await _save_statement_to_aws(session.user_id, name, content_bytes, session.encryption_key)
-                                    if sid:
-                                        statement_ids.append(sid)
-                                except Exception as e:
-                                    logger.error(f"Failed to save additional statement: {e}")
+                        session.user_response = {"action": "upload", "document_text": "".join(new_parts)}
+                    else:
+                        logger.info("  User skipped document request")
+                        session.user_response = {"action": "skip"}
 
-                    session.user_response = {"action": "upload", "document_text": "".join(new_parts)}
-                else:
-                    logger.info("  User skipped document request")
-                    session.user_response = {"action": "skip"}
+                    await send_progress(ws, "analyzing", "Continuing analysis...", 55)
 
-                await send_progress(ws, "analyzing", "Continuing analysis...", 55)
+                elif event_type == "ask_question":
+                    logger.info(f"  Agent asking: {event_data['question']}")
+                    await send_json(ws, {
+                        "type": "ask_question",
+                        "question": event_data["question"],
+                        "options": event_data["options"],
+                    })
 
-            elif event_type == "ask_question":
-                logger.info(f"  Agent asking: {event_data['question']}")
-                await send_json(ws, {
-                    "type": "ask_question",
-                    "question": event_data["question"],
-                    "options": event_data["options"],
-                })
+                    # Wait for client answer (with timeout)
+                    try:
+                        resp_msg = await _receive_json(ws)
+                    except (json.JSONDecodeError, asyncio.TimeoutError):
+                        await send_json(ws, {"type": "error", "message": "Invalid response or timeout"})
+                        raise asyncio.CancelledError()
 
-                # Wait for client answer (with timeout)
-                try:
-                    resp_msg = await _receive_json(ws)
-                except (json.JSONDecodeError, asyncio.TimeoutError):
-                    await send_json(ws, {"type": "error", "message": "Invalid response or timeout"})
-                    return
+                    answer = resp_msg.get("answer", "No answer provided")
+                    logger.info(f"  User answered: {answer}")
+                    session.user_response = {"answer": answer}
 
-                answer = resp_msg.get("answer", "No answer provided")
-                logger.info(f"  User answered: {answer}")
-                session.user_response = {"answer": answer}
+                    await send_progress(ws, "analyzing", "Continuing analysis...", 55)
 
-                await send_progress(ws, "analyzing", "Continuing analysis...", 55)
+                elif event_type == "result":
+                    report_data = event_data
+                    logger.info(f"[2/5] Gemini analysis done ({time.time() - t1:.1f}s)")
 
-            elif event_type == "result":
-                report_data = event_data
-                logger.info(f"[2/5] Gemini analysis done ({time.time() - t1:.1f}s)")
+                elif event_type == "error":
+                    await send_json(ws, {"type": "error", "message": event_data})
+                    raise asyncio.CancelledError()
 
-            elif event_type == "error":
-                await send_json(ws, {"type": "error", "message": event_data})
-                return
-
+        try:
+            # max timeout for the entire agent analysis loop
+            await asyncio.wait_for(run_analysis_stream(), timeout=GEMINI_ANALYSIS_TIMEOUT)
+        except asyncio.TimeoutError:
+            logger.error(f"Gemini analysis stream timed out after {GEMINI_ANALYSIS_TIMEOUT}s.")
+            await send_json(ws, {"type": "error", "message": "The AI analysis timed out. Please try a smaller file."})
+            return
+        except asyncio.CancelledError:
+            return  # Handled error inside loop
+            
         if report_data is None:
             await send_json(ws, {"type": "error", "message": "Analysis failed to produce a report"})
             return
@@ -411,9 +461,17 @@ async def ws_analyze(ws: WebSocket):
         await send_progress(ws, "generating", "Creating your podcast script...", 60)
 
         t2 = time.time()
-        podcast_script = await generate_podcast_script(report_data, language=language)
-        logger.info(f"[3/5] Podcast script done ({time.time() - t2:.1f}s, {len(podcast_script)} chars)")
-        await send_progress(ws, "generating", "Podcast script complete!", 70)
+        try:
+            podcast_script = await asyncio.wait_for(
+                generate_podcast_script(report_data, language=language), 
+                timeout=GEMINI_FOLLOWUP_PODCAST_TIMEOUT
+            )
+            logger.info(f"[3/5] Podcast script done ({time.time() - t2:.1f}s, {len(podcast_script)} chars)")
+            await send_progress(ws, "generating", "Podcast script complete!", 70)
+        except asyncio.TimeoutError:
+            logger.error("Podcast script generation timed out.")
+            await send_json(ws, {"type": "error", "message": "Failed to generate podcast script in time."})
+            return 
 
         # Step 4: Generate TTS audio with ElevenLabs
         logger.info("[4/5] Generating podcast audio...")
@@ -494,7 +552,9 @@ async def analyze_followup(request: FollowUpRequest, raw_request: Request):
         logger.info(f"=== POST /analyze/follow-up (stream) lang={request.language} ===")
         full_text = ""
 
-        try:
+        # Timeout wrapper for chat stream limit
+        async def run_chat_stream():
+            nonlocal full_text
             async for chunk in generate_followup_chat_stream(
                 report_data=request.report_data,
                 prompt=request.prompt,
@@ -504,17 +564,30 @@ async def analyze_followup(request: FollowUpRequest, raw_request: Request):
                 full_text += chunk
                 yield f"data: {json.dumps({'type': 'chunk', 'text': chunk})}\n\n"
 
+        try:
+            # Wrap generator with a manual timeout iteration. wait_for alone won't work perfectly on the yielded generator here without an async generator comprehension or manual loop.
+            async for chunk in run_chat_stream():
+                yield chunk # Stream timeout is implicit on the Starlette response level for StreamingResponse, but we should wrap it manually if needed. Actually StreamingResponse does not have a global timeout, so we will wrap the *generate_followup_podcast_script* below.
+                if time.time() - t0 > GEMINI_FOLLOWUP_CHAT_TIMEOUT:
+                   raise asyncio.TimeoutError()
+
             logger.info(f"  [1/2] Follow-up stream done ({time.time() - t0:.1f}s)")
 
             t1 = time.time()
-            podcast_script = await generate_followup_podcast_script(
-                ai_response=full_text,
-                prompt=request.prompt,
-                language=request.language,
-            )
+            podcast_script = await asyncio.wait_for(
+                generate_followup_podcast_script(
+                    ai_response=full_text,
+                    prompt=request.prompt,
+                    language=request.language,
+                ),
+                timeout=GEMINI_FOLLOWUP_PODCAST_TIMEOUT
+           )
             logger.info(f"  [2/2] Follow-up script done ({time.time() - t1:.1f}s)")
 
             yield f"data: {json.dumps({'type': 'done', 'full_text': full_text, 'podcast_script': podcast_script})}\n\n"
+        except asyncio.TimeoutError:
+            logger.error("Follow-up generation timed out.")
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Request timed out.'})}\n\n"
         except Exception as e:
             logger.error(f"Error during follow-up stream: {e}", exc_info=True)
             yield f"data: {json.dumps({'type': 'error', 'message': 'An internal error occurred.'})}\n\n"

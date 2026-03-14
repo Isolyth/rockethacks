@@ -194,25 +194,27 @@ export function startAnalysis(opts: AnalysisOptions): AnalysisHandle {
 		typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 	const baseUrl = import.meta.env.VITE_WS_URL || `${wsProtocol}//localhost:8000/ws/analyze`;
 
-	// No credentials in URL — they go in the first message body
-	const ws = new WebSocket(baseUrl);
+	// Add credentials to URL query params instead of the first message body to authenticate before accepting connection
+	let urlWithParams = baseUrl;
+	if (opts.token) {
+		const params = new URLSearchParams();
+		params.append('token', opts.token);
+		if (opts.encryptionKey) {
+			params.append('enc_key', opts.encryptionKey);
+		}
+		urlWithParams += `?${params.toString()}`;
+	}
+
+	const ws = new WebSocket(urlWithParams);
 	let open = false;
 
 	ws.onopen = async () => {
 		open = true;
 		try {
-			// Build the message with auth credentials in body
+			// Build the message
 			const message: Record<string, unknown> = {
 				language: opts.language
 			};
-
-			// Include auth token and encryption key in message body
-			if (opts.token) {
-				message.token = opts.token;
-				if (opts.encryptionKey) {
-					message.enc_key = opts.encryptionKey;
-				}
-			}
 
 			if (opts.savedStatementIds && opts.savedStatementIds.length > 0) {
 				message.type = 'use_saved_statements';

@@ -22,6 +22,32 @@ class RateLimiter:
         return True
 
 
+class FailedLoginLimiter:
+    """Tracks failed login attempts and locks out a key (e.g., email) if it exceeds max_failures within the window."""
+
+    def __init__(self, max_failures: int, lockout_window_seconds: int):
+        self.max_failures = max_failures
+        self.window = lockout_window_seconds
+        self._failures: dict[str, list[float]] = defaultdict(list)
+
+    def is_locked(self, key: str) -> bool:
+        """Check if the key is currently locked out."""
+        now = time.time()
+        cutoff = now - self.window
+        # Clean up old failures outside the window
+        self._failures[key] = [t for t in self._failures[key] if t > cutoff]
+        return len(self._failures[key]) >= self.max_failures
+
+    def add_failure(self, key: str):
+        """Record a failed login attempt."""
+        self._failures[key].append(time.time())
+
+    def clear(self, key: str):
+        """Clear all failures for a key (e.g., on successful login)."""
+        if key in self._failures:
+            del self._failures[key]
+
+
 # --- WebSocket connection tracking ---
 
 _active_connections: dict[str, int] = defaultdict(int)

@@ -4,10 +4,15 @@ import logging
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
-from config import AUTH_RATE_LIMIT_REQUESTS, AUTH_RATE_LIMIT_WINDOW
+from config import (
+    AUTH_RATE_LIMIT_REQUESTS,
+    AUTH_RATE_LIMIT_WINDOW,
+    LOGIN_MAX_FAILURES,
+    LOGIN_LOCKOUT_WINDOW,
+)
 from models.schemas import AuthResponse, LoginRequest, SignupRequest, UserResponse
 from services.auth import cognito_login, cognito_signup, get_user_from_token
-from services.rate_limit import RateLimiter
+from services.rate_limit import RateLimiter, FailedLoginLimiter
 
 logger = logging.getLogger("uvicorn.error")
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -15,6 +20,11 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 _auth_limiter = RateLimiter(
     max_requests=AUTH_RATE_LIMIT_REQUESTS,
     window_seconds=AUTH_RATE_LIMIT_WINDOW,
+)
+
+_failed_login_limiter = FailedLoginLimiter(
+    max_failures=LOGIN_MAX_FAILURES,
+    lockout_window_seconds=LOGIN_LOCKOUT_WINDOW,
 )
 
 
@@ -63,11 +73,18 @@ async def signup(req: SignupRequest, request: Request):
 @router.post("/login", response_model=AuthResponse)
 async def login(req: LoginRequest, request: Request):
     _check_rate_limit(request)
+    
+    email_key = req.email.lower()
+    if _failed_login_limiter.is_locked(email_key):
+        raise HTTPException(status_code=429, detail="Too many failed login attempts. Please wait 6 minutes.")
+        
     try:
         result = await cognito_login(req.email, req.password)
+        _failed_login_limiter.clear(email_key)
     except Exception as e:
         detail = str(e)
         if "NotAuthorizedException" in detail or "UserNotFoundException" in detail:
+            _failed_login_limiter.add_failure(email_key)
             raise HTTPException(status_code=401, detail="Invalid email or password")
         logger.error(f"Login error: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail="Login failed")
