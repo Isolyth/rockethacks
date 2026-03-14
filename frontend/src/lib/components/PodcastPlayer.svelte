@@ -91,12 +91,21 @@
 		return `${m}:${sec.toString().padStart(2, '0')}`;
 	}
 
-	function downloadMp3() {
+	async function downloadMp3() {
 		if (!resolvedAudioUrl) return;
-		const a = document.createElement('a');
-		a.href = resolvedAudioUrl;
-		a.download = 'podcast.mp3';
-		a.click();
+		try {
+			const resp = await fetch(resolvedAudioUrl);
+			const blob = await resp.blob();
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = 'podcast.mp3';
+			a.click();
+			URL.revokeObjectURL(url);
+		} catch {
+			// Fallback: open in new tab if fetch fails (e.g. CORS)
+			window.open(resolvedAudioUrl, '_blank');
+		}
 	}
 
 	// Fallback: split by paragraphs when no sentence data
