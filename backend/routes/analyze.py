@@ -49,8 +49,10 @@ async def ws_analyze(ws: WebSocket):
 
         t0 = time.time()
         files = msg["files"]
+        language = msg.get("language", "en")
+        session.language = language
         file_names = [f["name"] for f in files]
-        logger.info(f"=== WS /ws/analyze with {len(files)} file(s): {file_names} ===")
+        logger.info(f"=== WS /ws/analyze with {len(files)} file(s): {file_names} lang={language} ===")
 
         await send_json(ws, {
             "type": "progress",
@@ -98,7 +100,7 @@ async def ws_analyze(ws: WebSocket):
         report_data = None
 
         async for event_type, event_data in analyze_with_gemini_agent(
-            all_text, file_count=len(files), session=session
+            all_text, file_count=len(files), session=session, language=language
         ):
             if event_type == "thinking":
                 await send_json(ws, {
@@ -203,7 +205,7 @@ async def ws_analyze(ws: WebSocket):
         })
 
         t2 = time.time()
-        podcast_script = await generate_podcast_script(report_data)
+        podcast_script = await generate_podcast_script(report_data, language=language)
         logger.info(f"[3/5] Podcast script done ({time.time() - t2:.1f}s, {len(podcast_script)} chars)")
 
         await send_json(ws, {
@@ -224,7 +226,7 @@ async def ws_analyze(ws: WebSocket):
 
         t3 = time.time()
         try:
-            audio_result = await generate_podcast_audio(podcast_script)
+            audio_result = await generate_podcast_audio(podcast_script, language=language)
             logger.info(f"[4/5] Audio done ({time.time() - t3:.1f}s, {len(audio_result['sentences'])} sentences)")
 
             await send_json(ws, {

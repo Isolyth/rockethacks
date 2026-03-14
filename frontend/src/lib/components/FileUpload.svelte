@@ -1,7 +1,25 @@
 <script lang="ts">
-	let { onupload }: { onupload: (files: File[]) => void } = $props();
+	let { onupload }: { onupload: (files: File[], language: string) => void } = $props();
+
+	const languages = [
+		{ code: 'en', name: 'English' },
+		{ code: 'es', name: 'Spanish' },
+		{ code: 'fr', name: 'French' },
+		{ code: 'de', name: 'German' },
+		{ code: 'pt', name: 'Portuguese' },
+		{ code: 'it', name: 'Italian' },
+		{ code: 'ja', name: 'Japanese' },
+		{ code: 'ko', name: 'Korean' },
+		{ code: 'zh', name: 'Chinese' },
+		{ code: 'hi', name: 'Hindi' },
+		{ code: 'ar', name: 'Arabic' },
+		{ code: 'nl', name: 'Dutch' },
+		{ code: 'pl', name: 'Polish' },
+		{ code: 'ru', name: 'Russian' },
+	];
 
 	let files = $state<File[]>([]);
+	let selectedLanguage = $state('en');
 	let dragging = $state(false);
 	let fileInput: HTMLInputElement;
 
@@ -90,7 +108,16 @@
 			{/each}
 		</div>
 
-		<button class="analyze-btn" onclick={() => onupload(files)} type="button">
+		<div class="language-row">
+			<label class="language-label" for="lang-select">Report & podcast language</label>
+			<select id="lang-select" class="language-select" bind:value={selectedLanguage}>
+				{#each languages as lang}
+					<option value={lang.code}>{lang.name}</option>
+				{/each}
+			</select>
+		</div>
+
+		<button class="analyze-btn" onclick={() => onupload(files, selectedLanguage)} type="button">
 			Analyze {files.length} {files.length === 1 ? 'file' : 'files'}
 		</button>
 	{/if}
@@ -184,6 +211,37 @@
 
 	.file-remove:hover {
 		color: var(--color-danger);
+	}
+
+	.language-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 0.75rem 1rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+	}
+
+	.language-label {
+		font-size: 0.9rem;
+		color: var(--color-text-muted);
+	}
+
+	.language-select {
+		padding: 0.5rem 0.75rem;
+		background: var(--color-surface-2);
+		color: var(--color-text);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.9rem;
+		min-width: 140px;
+	}
+
+	.language-select:focus {
+		outline: none;
+		border-color: var(--color-primary);
 	}
 
 	.analyze-btn {

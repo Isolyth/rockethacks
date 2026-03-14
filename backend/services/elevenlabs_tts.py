@@ -8,7 +8,7 @@ from elevenlabs.client import ElevenLabs
 load_dotenv()
 
 VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"  # George
-MODEL_ID = "eleven_multilingual_v2"
+MODEL_ID = "eleven_flash_v2_5"
 OUTPUT_FORMAT = "mp3_44100_128"
 
 
@@ -56,7 +56,7 @@ def _build_sentence_timestamps(
     return result
 
 
-async def generate_podcast_audio(text: str) -> dict:
+async def generate_podcast_audio(text: str, language: str = "en") -> dict:
     """Generate TTS audio with sentence-level timestamps.
 
     Returns dict with:
@@ -65,12 +65,18 @@ async def generate_podcast_audio(text: str) -> dict:
     """
     client = _get_client()
 
-    response = await asyncio.to_thread(
-        client.text_to_speech.convert_with_timestamps,
+    kwargs = dict(
         text=text,
         voice_id=VOICE_ID,
         model_id=MODEL_ID,
         output_format=OUTPUT_FORMAT,
+    )
+    if language != "en":
+        kwargs["language_code"] = language
+
+    response = await asyncio.to_thread(
+        client.text_to_speech.convert_with_timestamps,
+        **kwargs,
     )
 
     audio_b64 = response.audio_base_64

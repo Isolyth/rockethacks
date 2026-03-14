@@ -33,6 +33,7 @@ async function filesToPayload(files: File[]): Promise<{ name: string; content: s
 
 export function startAnalysis(
 	files: File[],
+	language: string,
 	onProgress: (event: ProgressEvent) => void,
 	onReportReady: (report: FinancialReport) => void,
 	onPodcastAudioReady: (audio: PodcastAudio) => void,
@@ -51,7 +52,8 @@ export function startAnalysis(
 			ws.send(
 				JSON.stringify({
 					type: 'upload_files',
-					files: payload
+					files: payload,
+					language
 				})
 			);
 		} catch {

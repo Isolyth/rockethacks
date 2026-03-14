@@ -23,10 +23,19 @@ MULTI_DOC_REMINDER = """
 IMPORTANT: You are receiving $file_count separate bank statement documents. They are separated by "--- filename ---" markers. Treat them as one combined financial picture — merge all transactions together when calculating totals, categories, and trends. Do not analyze them separately.
 """
 
+LANGUAGE_NAMES = {
+    "en": "English", "es": "Spanish", "fr": "French", "de": "German",
+    "pt": "Portuguese", "it": "Italian", "ja": "Japanese", "ko": "Korean",
+    "zh": "Chinese", "hi": "Hindi", "ar": "Arabic", "nl": "Dutch",
+    "pl": "Polish", "ru": "Russian",
+}
+
 AGENT_PROMPT = """\
 You are a financial analyst agent. You have access to tools to help you produce the best possible analysis.
 
 You will be given bank statement data. Your goal is to analyze it and produce a comprehensive financial report. You should actively engage with the user to gather context and additional data before finalizing your report.
+
+$language_instruction
 
 ## Your tools
 
@@ -96,6 +105,8 @@ You are a friendly, engaging financial podcast host. Based on the following fina
 4. Calls out any concerning patterns or positive habits
 5. Gives 2-3 actionable tips based on the data
 6. Closes with encouragement
+
+$language_instruction
 
 IMPORTANT: Your output will be fed directly into a text-to-speech engine and read aloud as-is. Write ONLY the spoken words. Do NOT include:
 - Speaker labels (e.g., "Host:", "Narrator:")
@@ -252,11 +263,20 @@ async def _stream_and_collect(contents, config):
         yield ("_response", types.Content(role="model", parts=collected_parts))
 
 
+def _language_instruction(language: str) -> str:
+    """Build a language instruction string for prompts."""
+    if language == "en":
+        return ""
+    lang_name = LANGUAGE_NAMES.get(language, language)
+    return f"IMPORTANT: You MUST write ALL of your output in {lang_name}. This includes questions, options, insights, category names, and the final report. The bank statement data may be in any language — always respond in {lang_name}."
+
+
 async def analyze_with_gemini_agent(
     statement_text: str,
     file_count: int,
     session: Session,
     max_requests: int = MAX_DOCUMENT_REQUESTS,
+    language: str = "en",
 ):
     """Async generator yielding: ("result", data), ("request_documents", data), ("ask_question", data), ("thinking", text), ("error", msg)."""
     from string import Template
@@ -264,6 +284,7 @@ async def analyze_with_gemini_agent(
     prompt = Template(AGENT_PROMPT).safe_substitute(
         statement_text=statement_text,
         max_requests=max_requests,
+        language_instruction=_language_instruction(language),
     )
     if file_count > 1:
         reminder = Template(MULTI_DOC_REMINDER).safe_substitute(file_count=file_count)
@@ -444,10 +465,19 @@ async def _stream_via_thread(contents, config):
         yield ("_response", last_content)
 
 
-async def generate_podcast_script(report: dict) -> str:
+async def generate_podcast_script(report: dict, language: str = "en") -> str:
     from string import Template
 
-    prompt = Template(PODCAST_PROMPT).safe_substitute(report_json=json.dumps(report, indent=2))
+    lang_name = LANGUAGE_NAMES.get(language, language)
+    if language == "en":
+        lang_instruction = ""
+    else:
+        lang_instruction = f"IMPORTANT: Write the ENTIRE script in {lang_name}. The listener speaks {lang_name}."
+
+    prompt = Template(PODCAST_PROMPT).safe_substitute(
+        report_json=json.dumps(report, indent=2),
+        language_instruction=lang_instruction,
+    )
     response = await asyncio.to_thread(
         client.models.generate_content,
         model=MODEL,
