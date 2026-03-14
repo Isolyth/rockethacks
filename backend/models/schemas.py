@@ -27,12 +27,30 @@ class FinancialSummary(BaseModel):
     date_range: str
 
 
+class GroundingSource(BaseModel):
+    uri: str
+    title: str | None = None
+    domain: str | None = None
+
+
+class GroundingCitation(BaseModel):
+    text_segment: str
+    source_indices: list[int]
+
+
+class GroundingData(BaseModel):
+    sources: list[GroundingSource]
+    citations: list[GroundingCitation]
+    search_entry_point_html: str | None = None
+
+
 class FinancialReport(BaseModel):
     summary: FinancialSummary
     categories: list[CategoryBreakdown]
     top_merchants: list[MerchantSummary]
     insights: list[str]
     monthly_trend: list[MonthlyTrend]
+    grounding: GroundingData | None = None
 
 
 class AnalysisResult(BaseModel):

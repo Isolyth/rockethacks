@@ -11,8 +11,11 @@ from models.schemas import (
     MonthlyTrend,
     AnalysisResult,
     DocumentRequest,
+    GroundingSource,
+    GroundingCitation,
+    GroundingData,
 )
-from tests.conftest import VALID_REPORT_DATA
+from tests.conftest import VALID_REPORT_DATA, VALID_GROUNDING_DATA
 
 
 # ── CategoryBreakdown ────────────────────────────────────────────────────────
@@ -231,6 +234,82 @@ class TestAnalysisResult:
             podcast_script="",
         )
         assert result.podcast_script == ""
+
+
+# ── GroundingSource ──────────────────────────────────────────────────────────
+
+class TestGroundingSource:
+    def test_valid(self):
+        s = GroundingSource(uri="https://example.com", title="Example", domain="example.com")
+        assert s.uri == "https://example.com"
+
+    def test_minimal(self):
+        s = GroundingSource(uri="https://example.com")
+        assert s.title is None
+        assert s.domain is None
+
+    def test_missing_uri(self):
+        with pytest.raises(ValidationError):
+            GroundingSource()
+
+
+# ── GroundingCitation ───────────────────────────────────────────────────────
+
+class TestGroundingCitation:
+    def test_valid(self):
+        c = GroundingCitation(text_segment="Average is 20%", source_indices=[0, 1])
+        assert c.text_segment == "Average is 20%"
+        assert c.source_indices == [0, 1]
+
+    def test_empty_indices(self):
+        c = GroundingCitation(text_segment="text", source_indices=[])
+        assert c.source_indices == []
+
+    def test_missing_text(self):
+        with pytest.raises(ValidationError):
+            GroundingCitation(source_indices=[0])
+
+
+# ── GroundingData ───────────────────────────────────────────────────────────
+
+class TestGroundingData:
+    def test_valid(self):
+        gd = GroundingData(**VALID_GROUNDING_DATA)
+        assert len(gd.sources) == 2
+        assert len(gd.citations) == 1
+
+    def test_no_html(self):
+        gd = GroundingData(sources=[], citations=[])
+        assert gd.search_entry_point_html is None
+
+    def test_empty_sources(self):
+        gd = GroundingData(sources=[], citations=[], search_entry_point_html=None)
+        assert gd.sources == []
+
+
+# ── FinancialReport with grounding ──────────────────────────────────────────
+
+class TestFinancialReportGrounding:
+    def test_report_without_grounding(self):
+        report = FinancialReport(**VALID_REPORT_DATA)
+        assert report.grounding is None
+
+    def test_report_with_grounding(self):
+        import copy
+        data = copy.deepcopy(VALID_REPORT_DATA)
+        data["grounding"] = VALID_GROUNDING_DATA
+        report = FinancialReport(**data)
+        assert report.grounding is not None
+        assert len(report.grounding.sources) == 2
+
+    def test_report_grounding_roundtrip(self):
+        import copy
+        data = copy.deepcopy(VALID_REPORT_DATA)
+        data["grounding"] = VALID_GROUNDING_DATA
+        report = FinancialReport(**data)
+        dumped = report.model_dump()
+        report2 = FinancialReport(**dumped)
+        assert report == report2
 
 
 # ── DocumentRequest ──────────────────────────────────────────────────────────

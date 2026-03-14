@@ -30,12 +30,30 @@ export interface MonthlyTrend {
 	expenses: number;
 }
 
+export interface GroundingSource {
+	uri: string;
+	title: string | null;
+	domain: string | null;
+}
+
+export interface GroundingCitation {
+	text_segment: string;
+	source_indices: number[];
+}
+
+export interface GroundingData {
+	sources: GroundingSource[];
+	citations: GroundingCitation[];
+	search_entry_point_html: string | null;
+}
+
 export interface FinancialReport {
 	summary: FinancialSummary;
 	categories: CategoryBreakdown[];
 	top_merchants: MerchantSummary[];
 	insights: string[];
 	monthly_trend: MonthlyTrend[];
+	grounding?: GroundingData | null;
 }
 
 export interface AnalysisResult {

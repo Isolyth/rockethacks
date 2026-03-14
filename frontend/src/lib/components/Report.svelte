@@ -83,6 +83,30 @@
 			</ul>
 		</section>
 	{/if}
+
+	{#if report.grounding?.sources && report.grounding.sources.length > 0}
+		<section class="section">
+			<h3>Sources</h3>
+			<ul class="sources">
+				{#each report.grounding.sources as source}
+					<li class="source-item">
+						<a href={source.uri} target="_blank" rel="noopener noreferrer">
+							{source.title || source.domain || source.uri}
+						</a>
+						{#if source.domain}
+							<span class="source-domain">{source.domain}</span>
+						{/if}
+					</li>
+				{/each}
+			</ul>
+		</section>
+	{/if}
+
+	{#if report.grounding?.search_entry_point_html}
+		<section class="section search-entry-point">
+			{@html report.grounding.search_entry_point_html}
+		</section>
+	{/if}
 </div>
 
 <style>
@@ -255,5 +279,42 @@
 		border-left: 3px solid var(--color-primary);
 		font-size: 0.9rem;
 		line-height: 1.5;
+	}
+
+	.sources {
+		list-style: none;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.source-item {
+		padding: 0.5rem 1rem;
+		background: var(--color-surface);
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--color-border);
+		font-size: 0.85rem;
+	}
+
+	.source-item a {
+		color: var(--color-primary);
+		text-decoration: none;
+	}
+
+	.source-item a:hover {
+		text-decoration: underline;
+	}
+
+	.source-domain {
+		color: var(--color-text-muted);
+		font-size: 0.75rem;
+		margin-left: 0.5rem;
+	}
+
+	.search-entry-point {
+		padding: 0.75rem 1rem;
+		background: var(--color-surface);
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--color-border);
 	}
 </style>

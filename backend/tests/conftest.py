@@ -24,6 +24,17 @@ VALID_REPORT_DATA = {
     ],
 }
 
+VALID_GROUNDING_DATA = {
+    "sources": [
+        {"uri": "https://example.com/savings", "title": "Savings Rates 2024", "domain": "example.com"},
+        {"uri": "https://example.com/spending", "title": "Average Spending", "domain": "example.com"},
+    ],
+    "citations": [
+        {"text_segment": "The average savings rate is 20%", "source_indices": [0]},
+    ],
+    "search_entry_point_html": "<div class='search-chip'>Powered by Google</div>",
+}
+
 MOCK_PODCAST_SCRIPT = "Welcome to your financial podcast! Let's dive into your spending habits."
 
 SAMPLE_CSV = b"date,amount,description\n2024-01-01,50.00,Coffee Shop\n2024-01-02,120.00,Grocery Store"
