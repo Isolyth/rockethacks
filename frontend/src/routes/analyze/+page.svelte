@@ -148,6 +148,14 @@
 		selectedStatements = [];
 		progress = { step: 'parsing', message: '', percent: 0 };
 	}
+
+	function handleBack() {
+		if (appState !== 'idle') {
+			reset();
+		} else {
+			goto('/');
+		}
+	}
 </script>
 
 <svelte:head>
@@ -156,6 +164,12 @@
 
 <main>
 	<div class="content">
+		<div class="top-bar">
+			<button class="back-btn" onclick={handleBack} type="button">
+				<span class="back-icon">←</span> Back
+			</button>
+		</div>
+
 		{#if appState === 'idle'}
 			<h1>New Analysis</h1>
 			<SavedStatements bind:selected={selectedStatements} />
@@ -322,6 +336,45 @@
 		font-size: 0.85rem;
 		color: var(--color-text-muted);
 		margin: 0;
+	}
+
+	.top-bar {
+		width: 100%;
+		max-width: 1400px;
+		display: flex;
+		justify-content: flex-start;
+		margin-bottom: -1rem;
+	}
+
+	.back-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 1rem;
+		background: transparent;
+		color: var(--color-text-muted);
+		border: 1px solid transparent;
+		border-radius: var(--radius-sm);
+		font-size: 0.95rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.back-btn:hover {
+		color: var(--color-text);
+		background: var(--color-surface-2);
+		border-color: var(--color-border);
+		transform: translateX(-2px);
+	}
+
+	.back-icon {
+		font-size: 1.1rem;
+		transition: transform 0.2s ease;
+	}
+
+	.back-btn:hover .back-icon {
+		transform: translateX(-2px);
 	}
 
 	.error-card {

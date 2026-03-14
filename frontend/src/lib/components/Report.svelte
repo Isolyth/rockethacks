@@ -1,20 +1,32 @@
 <script lang="ts">
-	import type { FinancialReport } from '$lib/types';
+	import type { FinancialReport } from "$lib/types";
 
 	let { report }: { report: FinancialReport } = $props();
 
 	function formatCurrency(n: number): string {
-		return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+		return new Intl.NumberFormat("en-US", {
+			style: "currency",
+			currency: "USD",
+		}).format(n);
 	}
 
 	const maxCategoryTotal = $derived(
-		Math.max(...report.categories.map((c) => c.total), 1)
+		Math.max(...report.categories.map((c) => c.total), 1),
 	);
 
 	const categoryColors = [
-		'#6366f1', '#8b5cf6', '#a78bfa', '#c084fc',
-		'#e879f9', '#f472b6', '#fb7185', '#f87171',
-		'#fb923c', '#fbbf24', '#a3e635', '#34d399',
+		"#6366f1",
+		"#8b5cf6",
+		"#a78bfa",
+		"#c084fc",
+		"#e879f9",
+		"#f472b6",
+		"#fb7185",
+		"#f87171",
+		"#fb923c",
+		"#fbbf24",
+		"#a3e635",
+		"#34d399",
 	];
 </script>
 
@@ -25,15 +37,24 @@
 	<div class="summary-cards">
 		<div class="card income">
 			<span class="card-label">Income</span>
-			<span class="card-value">{formatCurrency(report.summary.total_income)}</span>
+			<span class="card-value"
+				>{formatCurrency(report.summary.total_income)}</span
+			>
 		</div>
 		<div class="card expenses">
 			<span class="card-label">Expenses</span>
-			<span class="card-value">{formatCurrency(report.summary.total_expenses)}</span>
+			<span class="card-value"
+				>{formatCurrency(report.summary.total_expenses)}</span
+			>
 		</div>
-		<div class="card savings" class:negative={report.summary.net_savings < 0}>
+		<div
+			class="card savings"
+			class:negative={report.summary.net_savings < 0}
+		>
 			<span class="card-label">Net Savings</span>
-			<span class="card-value">{formatCurrency(report.summary.net_savings)}</span>
+			<span class="card-value"
+				>{formatCurrency(report.summary.net_savings)}</span
+			>
 		</div>
 	</div>
 
@@ -44,15 +65,22 @@
 				<div class="category-row">
 					<div class="category-info">
 						<span class="category-name">{cat.name}</span>
-						<span class="category-amount">{formatCurrency(cat.total)}</span>
+						<span class="category-amount"
+							>{formatCurrency(cat.total)}</span
+						>
 					</div>
 					<div class="category-bar-track">
 						<div
 							class="category-bar-fill"
-							style="width: {(cat.total / maxCategoryTotal) * 100}%; background: {categoryColors[i % categoryColors.length]}"
+							style="width: {(cat.total / maxCategoryTotal) *
+								100}%; background: {categoryColors[
+								i % categoryColors.length
+							]}"
 						></div>
 					</div>
-					<span class="category-pct">{cat.percentage.toFixed(1)}%</span>
+					<span class="category-pct"
+						>{cat.percentage.toFixed(1)}%</span
+					>
 				</div>
 			{/each}
 		</div>
@@ -65,8 +93,11 @@
 				{#each report.top_merchants as merchant}
 					<div class="merchant-row">
 						<span class="merchant-name">{merchant.name}</span>
-						<span class="merchant-count">{merchant.count} txns</span>
-						<span class="merchant-total">{formatCurrency(merchant.total)}</span>
+						<span class="merchant-count">{merchant.count} txns</span
+						>
+						<span class="merchant-total"
+							>{formatCurrency(merchant.total)}</span
+						>
 					</div>
 				{/each}
 			</div>
@@ -112,6 +143,12 @@
 <style>
 	.report {
 		width: 100%;
+		background: var(--color-surface);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		border-radius: var(--radius);
+		border: 1px solid var(--color-border);
+		padding: 2rem;
 	}
 
 	h2 {
@@ -134,6 +171,8 @@
 
 	.card {
 		background: var(--color-surface);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius);
 		padding: 1.25rem;
