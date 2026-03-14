@@ -118,6 +118,31 @@ export async function deleteStatement(token: string, statementId: string): Promi
 	if (!resp.ok) throw new Error('Failed to delete statement');
 }
 
+export async function sendFollowup(
+	token: string | null,
+	reportData: FinancialReport,
+	prompt: string,
+	history: { role: string; content: string }[] = [],
+	language: string = 'en'
+): Promise<{ message: string; podcast_script?: string }> {
+	const headers = token ? authHeaders(token) : {};
+	const resp = await apiFetch('/analyze/follow-up', {
+		method: 'POST',
+		headers,
+		body: JSON.stringify({
+			report_data: reportData,
+			prompt,
+			history,
+			language
+		})
+	});
+	if (!resp.ok) {
+		const err = await resp.json().catch(() => ({ detail: 'Failed to process follow-up' }));
+		throw new Error(err.detail || 'Failed to process follow-up');
+	}
+	return resp.json();
+}
+
 // --- WebSocket analysis ---
 
 interface AnalysisOptions {

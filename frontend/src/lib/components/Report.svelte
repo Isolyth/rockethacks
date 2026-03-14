@@ -1,7 +1,17 @@
 <script lang="ts">
 	import type { FinancialReport } from "$lib/types";
+	import QuestionCard from "$lib/components/QuestionCard.svelte";
+	import { sendFollowup } from "$lib/api";
+	import { auth } from "$lib/stores/auth.svelte";
 
 	let { report }: { report: FinancialReport } = $props();
+
+	// svelte-ignore state_referenced_locally
+	let currentReport = $state(report);
+	let isFollowingUp = $state(false);
+	let followupError = $state<string | null>(null);
+	let chatHistory = $state<{ role: 'user' | 'model'; content: string }[]>([]);
+	let chatInput = $state('');
 
 	function formatCurrency(n: number): string {
 		return new Intl.NumberFormat("en-US", {
@@ -11,49 +21,75 @@
 	}
 
 	const maxCategoryTotal = $derived(
-		Math.max(...report.categories.map((c) => c.total), 1),
+		Math.max(...currentReport.categories.map((c) => c.total), 1),
 	);
 
 	const categoryColors = [
-		"#6366f1",
-		"#8b5cf6",
-		"#a78bfa",
-		"#c084fc",
-		"#e879f9",
-		"#f472b6",
-		"#fb7185",
-		"#f87171",
-		"#fb923c",
-		"#fbbf24",
-		"#a3e635",
-		"#34d399",
+		"#4361EE",
+		"#3A0CA3",
+		"#7209B7",
+		"#F72585",
+		"#4CC9F0",
+		"#00B4D8",
+		"#0077B6",
+		"#023E8A",
 	];
+
+	async function submitChat() {
+		const prompt = chatInput.trim();
+		if (!prompt || isFollowingUp) return;
+
+		try {
+			isFollowingUp = true;
+			followupError = null;
+			
+			// Add user message to UI immediately
+			chatHistory = [...chatHistory, { role: 'user', content: prompt }];
+			chatInput = '';
+			
+			// Get token if user is signed in, otherwise null
+			const token = auth.token; 
+			const result = await sendFollowup(token, currentReport, prompt, chatHistory);
+			
+			// Add AI message to UI
+			chatHistory = [...chatHistory, { role: 'model', content: result.message }];
+			
+		} catch (err: any) {
+			followupError = err.message || "Something went wrong";
+			// Remove the user message if it failed, or leave it. Leaving it is fine, but they won't get a response.
+			// Ideally we could show an error state, but re-allowing submission is enough.
+		} finally {
+			isFollowingUp = false;
+		}
+	}
 </script>
 
 <div class="report">
-	<h2>Financial Report</h2>
-	<p class="date-range">{report.summary.date_range}</p>
+	<div class="header-content">
+		<h2>Financial Report</h2>
+	</div>
+	<p class="date-range">{currentReport.summary.date_range}</p>
 
 	<div class="summary-cards">
 		<div class="card income">
 			<span class="card-label">Income</span>
 			<span class="card-value"
-				>{formatCurrency(report.summary.total_income)}</span
+				>{formatCurrency(currentReport.summary.total_income)}</span
 			>
 		</div>
 		<div class="card expenses">
 			<span class="card-label">Expenses</span>
 			<span class="card-value"
-				>{formatCurrency(report.summary.total_expenses)}</span
+				>{formatCurrency(currentReport.summary.total_expenses)}</span
 			>
 		</div>
 		<div
 			class="card savings"
-			class:negative={report.summary.net_savings < 0}
+			class:negative={currentReport.summary.net_savings < 0}
 		>
 			<span class="card-label">Net Savings</span>
 			<span class="card-value"
-				>{formatCurrency(report.summary.net_savings)}</span
+				>{formatCurrency(currentReport.summary.net_savings)}</span
 			>
 		</div>
 	</div>
@@ -61,7 +97,7 @@
 	<section class="section">
 		<h3>Spending by Category</h3>
 		<div class="categories">
-			{#each report.categories as cat, i}
+			{#each currentReport.categories as cat, i}
 				<div class="category-row">
 					<div class="category-info">
 						<span class="category-name">{cat.name}</span>
@@ -86,11 +122,11 @@
 		</div>
 	</section>
 
-	{#if report.top_merchants.length > 0}
+	{#if currentReport.top_merchants.length > 0}
 		<section class="section">
 			<h3>Top Merchants</h3>
 			<div class="merchants">
-				{#each report.top_merchants as merchant}
+				{#each currentReport.top_merchants as merchant}
 					<div class="merchant-row">
 						<span class="merchant-name">{merchant.name}</span>
 						<span class="merchant-count">{merchant.count} txns</span
@@ -104,22 +140,22 @@
 		</section>
 	{/if}
 
-	{#if report.insights.length > 0}
+	{#if currentReport.insights.length > 0}
 		<section class="section">
 			<h3>Insights</h3>
 			<ul class="insights">
-				{#each report.insights as insight}
+				{#each currentReport.insights as insight}
 					<li>{insight}</li>
 				{/each}
 			</ul>
 		</section>
 	{/if}
 
-	{#if report.grounding?.sources && report.grounding.sources.length > 0}
+	{#if currentReport.grounding?.sources && currentReport.grounding.sources.length > 0}
 		<section class="section">
 			<h3>Sources</h3>
 			<ul class="sources">
-				{#each report.grounding.sources as source}
+				{#each currentReport.grounding.sources as source}
 					<li class="source-item">
 						<a href={source.uri} target="_blank" rel="noopener noreferrer">
 							{source.title || source.domain || source.uri}
@@ -133,11 +169,53 @@
 		</section>
 	{/if}
 
-	{#if report.grounding?.search_entry_point_html}
+	{#if currentReport.grounding?.search_entry_point_html}
 		<section class="section search-entry-point">
-			{@html report.grounding.search_entry_point_html}
+			{@html currentReport.grounding.search_entry_point_html}
 		</section>
 	{/if}
+
+	<div class="chat-section">
+		<h3>Advisor Chat</h3>
+		<p class="chat-subtitle">Ask a "what-if" question to get financial advice based on your report.</p>
+		
+		{#if chatHistory.length > 0}
+			<div class="chat-log">
+				{#each chatHistory as msg}
+					<div class="chat-bubble {msg.role}">
+						<div class="msg-content">{msg.content}</div>
+					</div>
+				{/each}
+				{#if isFollowingUp}
+					<div class="chat-bubble model thinking">
+						<div class="msg-content">Thinking...</div>
+					</div>
+				{/if}
+			</div>
+		{/if}
+
+		{#if followupError}
+			<p class="error">{followupError}</p>
+		{/if}
+
+		<div class="chat-input-wrapper">
+			<textarea
+				class="chat-input"
+				placeholder="e.g., What if I cut out my Starbucks spending totally?"
+				bind:value={chatInput}
+				disabled={isFollowingUp}
+				onkeydown={(e) => {
+					if (e.key === 'Enter' && !e.shiftKey && chatInput.trim() && !isFollowingUp) {
+						e.preventDefault();
+						submitChat();
+					}
+				}}
+			></textarea>
+			<button class="send-btn" disabled={isFollowingUp || !chatInput.trim()} onclick={submitChat}>
+				Ask
+			</button>
+		</div>
+	</div>
 </div>
 
 <style>
@@ -355,5 +433,128 @@
 		background: var(--color-surface);
 		border-radius: var(--radius-sm);
 		border: 1px solid var(--color-border);
+	}
+
+	.chat-section {
+		margin-top: 3rem;
+		border-top: 1px solid var(--color-border);
+		padding-top: 2rem;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.chat-subtitle {
+		color: var(--color-text-muted);
+		margin-bottom: 1.5rem;
+		font-size: 0.95rem;
+	}
+
+	.chat-log {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		margin-bottom: 1.5rem;
+		max-height: 400px;
+		overflow-y: auto;
+		padding-right: 0.5rem;
+	}
+
+	.chat-bubble {
+		max-width: 80%;
+		padding: 0.85rem 1rem;
+		border-radius: 12px;
+		line-height: 1.5;
+		font-size: 0.95rem;
+	}
+
+	.chat-bubble.user {
+		align-self: flex-end;
+		background: var(--color-primary);
+		color: white;
+		border-bottom-right-radius: 4px;
+	}
+
+	.chat-bubble.model {
+		align-self: flex-start;
+		background: var(--color-surface-hover);
+		color: var(--color-text);
+		border: 1px solid var(--color-border);
+		border-bottom-left-radius: 4px;
+	}
+
+	.chat-bubble.thinking {
+		opacity: 0.7;
+		font-style: italic;
+		animation: pulse 1.5s infinite;
+	}
+
+	.chat-input-wrapper {
+		display: flex;
+		gap: 0.5rem;
+		align-items: flex-end;
+	}
+
+	.chat-input {
+		flex: 1;
+		min-height: 60px;
+		max-height: 150px;
+		resize: vertical;
+		padding: 0.75rem 1rem;
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--color-border);
+		background: var(--color-bg);
+		color: var(--color-text);
+		font-family: inherit;
+		font-size: 1rem;
+	}
+
+	.chat-input:focus {
+		outline: none;
+		border-color: var(--color-primary);
+		box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
+	}
+	
+	.chat-input:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.send-btn {
+		background: var(--color-primary);
+		color: white;
+		border: none;
+		border-radius: var(--radius-sm);
+		padding: 0 1.5rem;
+		height: 60px;
+		font-weight: 600;
+		cursor: pointer;
+		transition: background 0.2s;
+	}
+
+	.send-btn:hover:not(:disabled) {
+		background: #3651c4;
+	}
+
+	.send-btn:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.error {
+		color: var(--color-danger);
+		font-size: 0.875rem;
+		margin-bottom: 1rem;
+	}
+
+	.header-content {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	@keyframes pulse {
+		0% { opacity: 0.6; }
+		50% { opacity: 1; }
+		100% { opacity: 0.6; }
 	}
 </style>

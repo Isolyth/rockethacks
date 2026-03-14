@@ -16,7 +16,7 @@ from services.auth import get_user_from_token
 from services.dynamo import save_report, save_statement, get_statement
 from services.encryption import encrypt_bytes, decrypt_bytes
 from services.storage import upload_statement, upload_audio, get_statement_bytes
-from models.schemas import FinancialReport
+from models.schemas import FinancialReport, FollowUpRequest, FollowUpResponse
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -405,3 +405,41 @@ async def ws_analyze(ws: WebSocket):
     finally:
         session.active = False
         sessions.pop(session_id, None)
+
+
+@router.post("/analyze/follow-up", response_model=FollowUpResponse)
+async def analyze_followup(request: FollowUpRequest):
+    """Generate a conversational follow-up response based on user prompt and history."""
+    from services.gemini import generate_followup_chat, generate_followup_podcast_script
+
+    try:
+        t0 = time.time()
+        logger.info(f"=== POST /analyze/follow-up with prompt: '{request.prompt}' lang={request.language} ===")
+
+        # 1. Generate text response
+        ai_message = await generate_followup_chat(
+            report_data=request.report_data,
+            prompt=request.prompt,
+            history=request.history,
+            language=request.language
+        )
+        logger.info(f"  [1/2] Follow-up chat done ({time.time() - t0:.1f}s)")
+
+        # 2. Generate a 30s podcast snippet update based on the AI response
+        t1 = time.time()
+        podcast_script_update = await generate_followup_podcast_script(
+            ai_response=ai_message,
+            prompt=request.prompt,
+            language=request.language
+        )
+        logger.info(f"  [2/2] Follow-up script done ({time.time() - t1:.1f}s)")
+
+        return FollowUpResponse(
+            message=ai_message,
+            podcast_script=podcast_script_update,
+        )
+
+    except Exception as e:
+        logger.error(f"Error during follow-up chat: {e}", exc_info=True)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(e))
