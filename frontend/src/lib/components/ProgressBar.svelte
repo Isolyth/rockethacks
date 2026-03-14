@@ -95,8 +95,9 @@
 	}
 
 	.step.done .step-dot {
-		border-color: var(--color-success);
-		background: var(--color-success);
+		border-color: #1a7a3a;
+		background: linear-gradient(135deg, #1a7a3a 0%, #6ee7a0 30%, #22c55e 55%, #86efac 80%, #1a7a3a 100%);
+		box-shadow: inset 0 2px 4px rgba(180, 255, 200, 0.45), inset 0 -1px 3px rgba(0, 0, 0, 0.2);
 	}
 
 	.step-label {
