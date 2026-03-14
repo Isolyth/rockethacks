@@ -107,7 +107,7 @@
 </script>
 
 <svelte:head>
-	<title>StatementPod - Bank Statement Analyzer</title>
+	<title>Easy monAI - Bank Statement Analyzer</title>
 </svelte:head>
 
 <main>

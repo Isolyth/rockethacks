@@ -25,7 +25,7 @@ from elevenlabs.client import ElevenLabs
 # ---------------------------------------------------------------------------
 
 SAMPLE_TEXT = """\
-Hey there, welcome back to StatementPod, your personal financial breakdown! \
+Hey there, welcome back to Easy monAI, your personal financial breakdown! \
 I'm your host, and today we're diving deep into your latest bank statement data. \
 Grab a coffee, get comfortable, because we've got a lot to unpack.
 
@@ -97,13 +97,13 @@ spending that's trending downward, and no major red flags in your transaction \
 history. Keep this momentum going, stay intentional with your spending, and \
 you'll be in even better shape next month.
 
-That's all for this episode of StatementPod. Thanks for tuning in, and we'll \
+That's all for this episode of Easy monAI. Thanks for tuning in, and we'll \
 catch you next time with your updated financial snapshot. Until then, keep \
 making smart money moves!
 """
 
 # Minimal sample for testing when credits are low
-SHORT_SAMPLE_TEXT = "Welcome to StatementPod! Your finances are looking great this month."
+SHORT_SAMPLE_TEXT = "Welcome to Easy monAI! Your finances are looking great this month."
 
 # Popular voice IDs — run --list-voices to see all available voices
 DEFAULT_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"  # George
@@ -258,7 +258,7 @@ def convert_streaming(client: ElevenLabs, text: str, args: argparse.Namespace) -
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="ElevenLabs TTS test script for StatementPod",
+        description="ElevenLabs TTS test script for Easy monAI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("-i", "--input", help="Path to a text file with the podcast script")

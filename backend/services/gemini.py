@@ -15,7 +15,7 @@ logger = logging.getLogger("uvicorn.error")
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-MODEL = "gemini-2.5-flash"
+MODEL = "gemini-flash-latest"
 
 MAX_DOCUMENT_REQUESTS = int(os.getenv("MAX_DOCUMENT_REQUESTS", "3"))
 
