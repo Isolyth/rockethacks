@@ -4,11 +4,13 @@
 	let {
 		podcastScript,
 		audioBase64,
-		sentences
+		sentences,
+		audioUrl: externalAudioUrl = null
 	}: {
 		podcastScript: string;
 		audioBase64: string | null;
 		sentences: PodcastSentence[];
+		audioUrl?: string | null;
 	} = $props();
 
 	let audioEl = $state<HTMLAudioElement | null>(null);
@@ -18,14 +20,20 @@
 	let currentTime = $state(0);
 	let duration = $state(0);
 
-	let hasAudio = $derived(!!audioBase64 && sentences.length > 0);
+	let hasAudio = $derived(
+		(!!audioBase64 && sentences.length > 0) || !!externalAudioUrl
+	);
 
-	// Build audio blob URL from base64, with cleanup to prevent memory leaks
-	let audioUrl = $state('');
+	// Build audio blob URL from base64, or use external URL
+	let resolvedAudioUrl = $state('');
 
 	$effect(() => {
+		if (externalAudioUrl) {
+			resolvedAudioUrl = externalAudioUrl;
+			return;
+		}
 		if (!audioBase64) {
-			audioUrl = '';
+			resolvedAudioUrl = '';
 			return;
 		}
 		const binary = atob(audioBase64);
@@ -33,7 +41,7 @@
 		for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 		const blob = new Blob([bytes], { type: 'audio/mpeg' });
 		const url = URL.createObjectURL(blob);
-		audioUrl = url;
+		resolvedAudioUrl = url;
 		return () => URL.revokeObjectURL(url);
 	});
 
@@ -123,7 +131,7 @@
 		<div class="player">
 			<audio
 				bind:this={audioEl}
-				src={audioUrl}
+				src={resolvedAudioUrl}
 				ontimeupdate={onTimeUpdate}
 				onplay={() => (isPlaying = true)}
 				onpause={() => (isPlaying = false)}

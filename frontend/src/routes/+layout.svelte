@@ -17,7 +17,7 @@
 		goto('/');
 	}
 
-	let currentPath = $derived($page.url.pathname);
+	let currentPath = $derived($page.url.pathname as string);
 	let showNav = $derived(!auth.loading);
 </script>
 
@@ -34,7 +34,7 @@
 					<a href="/dashboard" class="nav-link" class:active={currentPath === '/dashboard'}
 						>Dashboard</a
 					>
-					<a href="/analyze" class="nav-link" class:active={currentPath === '/analyze'}
+					<a href="/analyze" class="nav-link" class:active={currentPath.startsWith('/analyze')}
 						>New Analysis</a
 					>
 					<span class="user-name">{auth.user?.display_name}</span>

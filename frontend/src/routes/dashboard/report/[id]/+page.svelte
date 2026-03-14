@@ -12,7 +12,7 @@
 	let loading = $state(true);
 	let error = $state('');
 
-	let reportId = $derived($page.params.id);
+	let reportId = $derived($page.params.id ?? '');
 
 	onMount(async () => {
 		if (!isAuthenticated()) {
