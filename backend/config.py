@@ -47,6 +47,8 @@ MAX_TEXT_LENGTH = int(os.getenv("MAX_TEXT_LENGTH", "500000"))  # 500K chars
 MAX_PDF_PAGES = int(os.getenv("MAX_PDF_PAGES", "200"))
 AUTH_RATE_LIMIT_REQUESTS = int(os.getenv("AUTH_RATE_LIMIT_REQUESTS", "10"))
 AUTH_RATE_LIMIT_WINDOW = int(os.getenv("AUTH_RATE_LIMIT_WINDOW", "60"))  # seconds
+LOGIN_MAX_FAILURES = int(os.getenv("LOGIN_MAX_FAILURES", "6"))
+LOGIN_LOCKOUT_WINDOW = int(os.getenv("LOGIN_LOCKOUT_WINDOW", "360"))  # 6 minutes
 
 
 def validate():
