@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
 	import FileUpload from '$lib/components/FileUpload.svelte';
 	import SavedStatements from '$lib/components/SavedStatements.svelte';
 	import ProgressBar from '$lib/components/ProgressBar.svelte';
@@ -53,8 +52,8 @@
 		{ code: 'ru', name: 'Russian' }
 	];
 
-	onMount(() => {
-		if (!isAuthenticated()) {
+	$effect(() => {
+		if (!auth.loading && !isAuthenticated()) {
 			goto('/login');
 		}
 	});

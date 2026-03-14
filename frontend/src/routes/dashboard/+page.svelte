@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
 	import { fetchReports, fetchStatements, deleteReport, deleteStatement } from '$lib/api';
 	import { auth, isAuthenticated } from '$lib/stores/auth.svelte';
 	import type { ReportSummaryItem, StatementItem } from '$lib/types';
@@ -9,13 +8,18 @@
 	let statements = $state<StatementItem[]>([]);
 	let loading = $state(true);
 	let activeTab = $state<'reports' | 'statements'>('reports');
+	let dataLoaded = false;
 
-	onMount(async () => {
+	$effect(() => {
+		if (auth.loading) return;
 		if (!isAuthenticated()) {
 			goto('/login');
 			return;
 		}
-		await loadData();
+		if (!dataLoaded) {
+			dataLoaded = true;
+			loadData();
+		}
 	});
 
 	async function loadData() {

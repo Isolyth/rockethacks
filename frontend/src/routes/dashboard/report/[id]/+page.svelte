@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { onMount } from 'svelte';
 	import { fetchReport } from '$lib/api';
 	import { auth, isAuthenticated } from '$lib/stores/auth.svelte';
 	import Report from '$lib/components/Report.svelte';
@@ -12,20 +11,23 @@
 	let reportData = $state<ReportDetail | null>(null);
 	let loading = $state(true);
 	let error = $state('');
+	let dataLoaded = false;
 
 	let reportId = $derived($page.params.id ?? '');
 
-	onMount(async () => {
+	$effect(() => {
+		if (auth.loading) return;
 		if (!isAuthenticated()) {
 			goto('/login');
 			return;
 		}
-		try {
-			reportData = await fetchReport(auth.token!, reportId);
-		} catch (e: any) {
-			error = e.message || 'Failed to load report';
+		if (!dataLoaded) {
+			dataLoaded = true;
+			fetchReport(auth.token!, reportId)
+				.then((data) => (reportData = data))
+				.catch((e: any) => (error = e.message || 'Failed to load report'))
+				.finally(() => (loading = false));
 		}
-		loading = false;
 	});
 </script>
 
