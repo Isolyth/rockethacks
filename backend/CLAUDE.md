@@ -19,7 +19,7 @@ pytest                    # run all tests
 pytest tests/test_parser.py  # specific test file
 ```
 
-Tests use FastAPI's TestClient with mocks for Gemini and ElevenLabs.
+158 tests across 7 test files. Uses FastAPI's TestClient with mocks for Gemini and ElevenLabs. Shared fixtures in `tests/conftest.py`.
 
 ## Structure
 
@@ -30,6 +30,8 @@ Tests use FastAPI's TestClient with mocks for Gemini and ElevenLabs.
 - `services/elevenlabs_tts.py` - TTS with sentence-level timestamp alignment
 - `services/session.py` - In-memory session management (dataclass + dict)
 - `models/schemas.py` - Pydantic models: FinancialReport, CategoryBreakdown, etc.
+- `tests/` - test_analyze, test_parser, test_schemas, test_session, test_elevenlabs_tts, test_gemini, test_main
+- `scripts/test_elevenlabs_tts.py` - Standalone CLI script for testing ElevenLabs TTS
 
 ## Key Patterns
 
