@@ -322,13 +322,14 @@
 		padding: 0.875rem 2rem;
 		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
-		border: none;
+		border: 2px solid var(--color-gold-border);
 		border-radius: var(--radius-pill);
 		font-size: 1rem;
 		font-weight: 600;
 		cursor: pointer;
 		transition: filter 0.2s;
 		width: 100%;
+		box-shadow: var(--gold-btn-shadow);
 	}
 
 	.primary-btn:hover {
@@ -421,12 +422,13 @@
 		padding: 0.75rem 1.5rem;
 		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
-		border: none;
+		border: 2px solid var(--color-gold-border);
 		border-radius: var(--radius-pill);
 		font-size: 0.9rem;
 		font-weight: 600;
 		cursor: pointer;
 		transition: filter 0.2s;
+		box-shadow: var(--gold-btn-shadow);
 	}
 
 	.view-btn:hover {

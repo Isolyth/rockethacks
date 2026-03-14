@@ -271,7 +271,7 @@
 		width: 40px;
 		height: 40px;
 		border-radius: 50%;
-		border: none;
+		border: 2px solid var(--color-gold-border);
 		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
 		display: flex;
@@ -279,6 +279,7 @@
 		justify-content: center;
 		flex-shrink: 0;
 		transition: filter 0.2s;
+		box-shadow: var(--gold-btn-shadow);
 	}
 
 	.play-btn:hover {

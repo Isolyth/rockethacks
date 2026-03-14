@@ -198,12 +198,13 @@
 		padding: 0.625rem 1.25rem;
 		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
-		border: none;
+		border: 2px solid var(--color-gold-border);
 		border-radius: var(--radius-pill);
 		font-size: 0.9rem;
 		font-weight: 600;
 		cursor: pointer;
 		transition: filter 0.2s;
+		box-shadow: var(--gold-btn-shadow);
 	}
 
 	.primary-btn:hover {

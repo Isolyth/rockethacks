@@ -267,11 +267,12 @@
 		padding: 0.625rem 1.25rem;
 		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
-		border: none;
+		border: 2px solid var(--color-gold-border);
 		border-radius: var(--radius-pill);
 		font-size: 0.875rem;
 		font-weight: 600;
 		transition: filter 0.2s;
+		box-shadow: var(--gold-btn-shadow);
 	}
 
 	.submit-btn:hover:not(:disabled) {

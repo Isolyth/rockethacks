@@ -279,11 +279,12 @@
 		padding: 0.875rem 2rem;
 		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
-		border: none;
+		border: 2px solid var(--color-gold-border);
 		border-radius: var(--radius-pill);
 		font-size: 1rem;
 		font-weight: 600;
 		transition: filter 0.2s;
+		box-shadow: var(--gold-btn-shadow);
 	}
 
 	.analyze-btn:hover {

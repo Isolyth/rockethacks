@@ -288,7 +288,7 @@
 	.send-btn {
 		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
-		border: none;
+		border: 2px solid var(--color-gold-border);
 		border-radius: var(--radius-pill);
 		padding: 0 1.25rem;
 		height: 48px;
@@ -296,6 +296,7 @@
 		cursor: pointer;
 		transition: filter 0.2s;
 		font-size: 0.9rem;
+		box-shadow: var(--gold-btn-shadow);
 	}
 
 	.send-btn:hover:not(:disabled) {

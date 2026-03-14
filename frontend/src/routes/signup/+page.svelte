@@ -127,13 +127,14 @@
 		padding: 0.75rem;
 		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
-		border: none;
+		border: 2px solid var(--color-gold-border);
 		border-radius: var(--radius-pill);
 		font-size: 1rem;
 		font-weight: 600;
 		cursor: pointer;
 		transition: opacity 0.2s;
 		margin-top: 0.5rem;
+		box-shadow: var(--gold-btn-shadow);
 	}
 
 	.submit-btn:hover:not(:disabled) {
