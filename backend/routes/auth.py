@@ -41,6 +41,7 @@ async def signup(req: SignupRequest):
     return AuthResponse(
         token=result["token"],
         user=UserResponse(**result["user"]),
+        encryption_key=result.get("encryption_key"),
     )
 
 
@@ -58,6 +59,7 @@ async def login(req: LoginRequest):
     return AuthResponse(
         token=result["token"],
         user=UserResponse(**result["user"]),
+        encryption_key=result.get("encryption_key"),
     )
 
 

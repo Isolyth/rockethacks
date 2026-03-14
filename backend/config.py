@@ -33,6 +33,7 @@ COGNITO_CLIENT_SECRET = os.getenv("COGNITO_CLIENT_SECRET")
 # DynamoDB
 DYNAMO_REPORTS_TABLE = os.getenv("DYNAMO_REPORTS_TABLE", "monai-reports")
 DYNAMO_STATEMENTS_TABLE = os.getenv("DYNAMO_STATEMENTS_TABLE", "monai-statements")
+DYNAMO_USER_SALTS_TABLE = os.getenv("DYNAMO_USER_SALTS_TABLE", "monai-user-salts")
 
 # CORS
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")

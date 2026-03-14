@@ -1,12 +1,15 @@
-"""Authentication via Amazon Cognito."""
+"""Authentication via Amazon Cognito with password-derived encryption keys."""
 
 import asyncio
 import base64
 import hashlib
 import hmac
 import logging
+import os
 
 import boto3
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import hashes
 
 from config import (
     AWS_ACCESS_KEY_ID,
@@ -16,10 +19,13 @@ from config import (
     COGNITO_CLIENT_ID,
     COGNITO_CLIENT_SECRET,
 )
+from services.dynamo import save_user_salt, get_user_salt
 
 logger = logging.getLogger("uvicorn.error")
 
 _cognito_client = None
+
+PBKDF2_ITERATIONS = 100_000
 
 
 def _get_cognito():
@@ -45,6 +51,17 @@ def _compute_secret_hash(username: str) -> str:
     return base64.b64encode(dig).decode("utf-8")
 
 
+def _derive_key(password: str, salt: bytes) -> bytes:
+    """Derive a 256-bit AES key from password + salt using PBKDF2."""
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=PBKDF2_ITERATIONS,
+    )
+    return kdf.derive(password.encode("utf-8"))
+
+
 def _extract_user_attrs(attrs: list[dict]) -> dict:
     """Convert Cognito user attributes list to a flat dict."""
     out = {}
@@ -54,7 +71,7 @@ def _extract_user_attrs(attrs: list[dict]) -> dict:
 
 
 async def cognito_signup(email: str, password: str, display_name: str) -> dict:
-    """Sign up a new user, auto-confirm, and return {token, user}."""
+    """Sign up a new user, auto-confirm, and return {token, user, encryption_key}."""
     client = _get_cognito()
     if client is None:
         raise RuntimeError("Cognito not configured")
@@ -100,11 +117,21 @@ async def cognito_signup(email: str, password: str, display_name: str) -> dict:
     # Get user info
     user_info = await get_user_from_token(access_token)
 
-    return {"token": access_token, "user": user_info}
+    # Generate salt and derive encryption key
+    salt = os.urandom(16)
+    salt_b64 = base64.b64encode(salt).decode("utf-8")
+    await save_user_salt(user_info["id"], salt_b64)
+    encryption_key = _derive_key(password, salt)
+
+    return {
+        "token": access_token,
+        "user": user_info,
+        "encryption_key": base64.b64encode(encryption_key).decode("utf-8"),
+    }
 
 
 async def cognito_login(email: str, password: str) -> dict:
-    """Log in and return {token, user}."""
+    """Log in and return {token, user, encryption_key}."""
     client = _get_cognito()
     if client is None:
         raise RuntimeError("Cognito not configured")
@@ -129,7 +156,25 @@ async def cognito_login(email: str, password: str) -> dict:
 
     user_info = await get_user_from_token(access_token)
 
-    return {"token": access_token, "user": user_info}
+    # Retrieve salt and derive encryption key
+    salt_b64 = await get_user_salt(user_info["id"])
+    if salt_b64:
+        salt = base64.b64decode(salt_b64)
+        encryption_key = _derive_key(password, salt)
+        enc_key_b64 = base64.b64encode(encryption_key).decode("utf-8")
+    else:
+        # Legacy user without salt — generate one now
+        salt = os.urandom(16)
+        salt_b64 = base64.b64encode(salt).decode("utf-8")
+        await save_user_salt(user_info["id"], salt_b64)
+        encryption_key = _derive_key(password, salt)
+        enc_key_b64 = base64.b64encode(encryption_key).decode("utf-8")
+
+    return {
+        "token": access_token,
+        "user": user_info,
+        "encryption_key": enc_key_b64,
+    }
 
 
 async def get_user_from_token(access_token: str) -> dict | None:

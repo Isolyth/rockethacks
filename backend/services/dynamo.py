@@ -14,6 +14,7 @@ from config import (
     AWS_REGION,
     DYNAMO_REPORTS_TABLE,
     DYNAMO_STATEMENTS_TABLE,
+    DYNAMO_USER_SALTS_TABLE,
 )
 
 logger = logging.getLogger("uvicorn.error")
@@ -41,6 +42,11 @@ def _reports_table():
 def _statements_table():
     db = _get_dynamodb()
     return db.Table(DYNAMO_STATEMENTS_TABLE) if db else None
+
+
+def _user_salts_table():
+    db = _get_dynamodb()
+    return db.Table(DYNAMO_USER_SALTS_TABLE) if db else None
 
 
 def _decimal_to_num(obj):
@@ -156,6 +162,7 @@ async def save_statement(user_id: str, statement_id: str, data: dict) -> bool:
         "s3_key": data.get("s3_key", ""),
         "file_size": data.get("file_size", 0),
         "file_type": data.get("file_type", ""),
+        "encrypted": data.get("encrypted", False),
     }
 
     await asyncio.to_thread(table.put_item, Item=item)
@@ -201,6 +208,29 @@ async def delete_statement(user_id: str, statement_id: str) -> bool:
     return True
 
 
+# --- User salts ---
+
+async def save_user_salt(user_id: str, salt_b64: str) -> bool:
+    table = _user_salts_table()
+    if table is None:
+        return False
+    await asyncio.to_thread(
+        table.put_item, Item={"user_id": user_id, "salt": salt_b64}
+    )
+    return True
+
+
+async def get_user_salt(user_id: str) -> str | None:
+    table = _user_salts_table()
+    if table is None:
+        return None
+    resp = await asyncio.to_thread(
+        table.get_item, Key={"user_id": user_id}
+    )
+    item = resp.get("Item")
+    return item["salt"] if item else None
+
+
 async def ensure_tables():
     """Create DynamoDB tables if they don't exist. No-op if AWS not configured."""
     db = _get_dynamodb()
@@ -225,6 +255,11 @@ async def ensure_tables():
              {"AttributeName": "statement_id", "KeyType": "RANGE"}],
             [{"AttributeName": "user_id", "AttributeType": "S"},
              {"AttributeName": "statement_id", "AttributeType": "S"}],
+        ),
+        (
+            DYNAMO_USER_SALTS_TABLE,
+            [{"AttributeName": "user_id", "KeyType": "HASH"}],
+            [{"AttributeName": "user_id", "AttributeType": "S"}],
         ),
     ]:
         if table_name not in existing:

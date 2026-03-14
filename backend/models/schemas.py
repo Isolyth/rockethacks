@@ -85,6 +85,7 @@ class UserResponse(BaseModel):
 class AuthResponse(BaseModel):
     token: str
     user: UserResponse
+    encryption_key: str | None = None
 
 
 class ReportSummaryItem(BaseModel):

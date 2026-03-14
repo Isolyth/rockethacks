@@ -15,7 +15,7 @@
 		loading = true;
 		try {
 			const result = await signup(email, password, displayName || undefined);
-			setAuth(result.token, result.user);
+			setAuth(result.token, result.user, result.encryption_key);
 			goto('/dashboard');
 		} catch (err: any) {
 			error = err.message || 'Signup failed';

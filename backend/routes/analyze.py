@@ -14,6 +14,7 @@ from services.elevenlabs_tts import generate_podcast_audio
 from services.session import Session, sessions
 from services.auth import get_user_from_token
 from services.dynamo import save_report, save_statement, get_statement
+from services.encryption import encrypt_bytes, decrypt_bytes
 from services.storage import upload_statement, upload_audio, get_statement_bytes
 from models.schemas import FinancialReport
 
@@ -40,12 +41,14 @@ def parse_file_data(name: str, content_bytes: bytes) -> str | None:
     return None
 
 
-async def _save_statement_to_aws(user_id: str, name: str, content_bytes: bytes) -> str | None:
-    """Save a statement to S3 and DynamoDB. Returns statement_id or None."""
+async def _save_statement_to_aws(user_id: str, name: str, content_bytes: bytes,
+                                  encryption_key: bytes | None = None) -> str | None:
+    """Save a statement to S3 and DynamoDB. Encrypts if key provided. Returns statement_id."""
     statement_id = uuid.uuid4().hex
     file_type = "pdf" if name.lower().endswith(".pdf") else "csv"
 
-    s3_key = await upload_statement(user_id, statement_id, name, content_bytes)
+    store_bytes = encrypt_bytes(encryption_key, content_bytes) if encryption_key else content_bytes
+    s3_key = await upload_statement(user_id, statement_id, name, store_bytes)
 
     await save_statement(user_id, statement_id, {
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
@@ -53,6 +56,7 @@ async def _save_statement_to_aws(user_id: str, name: str, content_bytes: bytes) 
         "s3_key": s3_key or "",
         "file_size": len(content_bytes),
         "file_type": file_type,
+        "encrypted": bool(encryption_key),
     })
     return statement_id
 
@@ -88,7 +92,8 @@ async def _save_report_to_aws(user_id: str, report_data: dict, podcast_script: s
     return report_id
 
 
-async def _parse_and_save_files(files: list[dict], user_id: str | None):
+async def _parse_and_save_files(files: list[dict], user_id: str | None,
+                                encryption_key: bytes | None = None):
     """Parse uploaded files and optionally save to S3/DynamoDB.
 
     Returns (all_text, statement_ids, file_count) or (None, bad_filename, []) on error.
@@ -110,7 +115,7 @@ async def _parse_and_save_files(files: list[dict], user_id: str | None):
         text_parts.append(f"\n--- {name} ---\n{text}")
 
         if user_id:
-            save_tasks.append(_save_statement_to_aws(user_id, name, content_bytes))
+            save_tasks.append(_save_statement_to_aws(user_id, name, content_bytes, encryption_key))
 
     # Save statements concurrently
     if save_tasks:
@@ -141,6 +146,10 @@ async def ws_analyze(ws: WebSocket):
             sessions.pop(session_id, None)
             return
         session.user_id = user_info["id"]
+        # Encryption key for statement storage
+        enc_key_b64 = ws.query_params.get("enc_key")
+        if enc_key_b64:
+            session.encryption_key = base64.b64decode(enc_key_b64)
         logger.info(f"Authenticated WebSocket session for user {session.user_id}")
 
     try:
@@ -177,7 +186,8 @@ async def ws_analyze(ws: WebSocket):
                 stmt = await get_statement(session.user_id, sid)
                 if stmt and stmt.get("s3_key"):
                     try:
-                        content_bytes = await get_statement_bytes(stmt["s3_key"])
+                        raw_bytes = await get_statement_bytes(stmt["s3_key"])
+                        content_bytes = decrypt_bytes(session.encryption_key, raw_bytes) if session.encryption_key and stmt.get("encrypted") else raw_bytes
                         text = parse_file_data(stmt["filename"], content_bytes)
                         if text:
                             text_parts.append(f"\n--- {stmt['filename']} ---\n{text}")
@@ -188,7 +198,7 @@ async def ws_analyze(ws: WebSocket):
 
             # Parse and save new files
             if new_files:
-                all_new_text, bad_name, new_sids = await _parse_and_save_files(new_files, session.user_id)
+                all_new_text, bad_name, new_sids = await _parse_and_save_files(new_files, session.user_id, session.encryption_key)
                 if all_new_text is None:
                     await send_json(ws, {
                         "type": "error",
@@ -208,7 +218,7 @@ async def ws_analyze(ws: WebSocket):
 
             await send_progress(ws, "parsing", "Extracting text from uploaded files...", 10)
 
-            all_text, bad_name, statement_ids = await _parse_and_save_files(files, session.user_id)
+            all_text, bad_name, statement_ids = await _parse_and_save_files(files, session.user_id, session.encryption_key)
             if all_text is None:
                 await send_json(ws, {
                     "type": "error",
@@ -274,7 +284,7 @@ async def ws_analyze(ws: WebSocket):
                             # Save additional files for authenticated users
                             if session.user_id:
                                 try:
-                                    sid = await _save_statement_to_aws(session.user_id, name, content_bytes)
+                                    sid = await _save_statement_to_aws(session.user_id, name, content_bytes, session.encryption_key)
                                     if sid:
                                         statement_ids.append(sid)
                                 except Exception as e:

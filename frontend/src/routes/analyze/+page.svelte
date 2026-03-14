@@ -74,6 +74,7 @@
 			files,
 			language,
 			token: auth.token,
+			encryptionKey: auth.encryptionKey,
 			savedStatementIds: selectedStatements.length > 0 ? selectedStatements : undefined,
 			onProgress: (evt) => {
 				progress = evt;

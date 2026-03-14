@@ -102,6 +102,7 @@ export interface UserResponse {
 export interface AuthResponse {
 	token: string;
 	user: UserResponse;
+	encryption_key: string | null;
 }
 
 export interface ReportSummaryItem {

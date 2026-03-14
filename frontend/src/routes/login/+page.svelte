@@ -14,7 +14,7 @@
 		loading = true;
 		try {
 			const result = await login(email, password);
-			setAuth(result.token, result.user);
+			setAuth(result.token, result.user, result.encryption_key);
 			goto('/dashboard');
 		} catch (err: any) {
 			error = err.message || 'Login failed';
