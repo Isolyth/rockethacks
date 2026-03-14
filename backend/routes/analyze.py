@@ -2,6 +2,7 @@ import asyncio
 import base64
 import json
 import logging
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -60,6 +61,21 @@ def parse_file_data(name: str, content_bytes: bytes) -> str | None:
     elif lower.endswith(".csv"):
         return parse_csv(content_bytes)
     return None
+
+
+def sanitize_filename(filename: str) -> str:
+    """Sanitize filename to prevent path traversal and XSS."""
+    if not isinstance(filename, str):
+        filename = "unnamed"
+    # Keep only alphanumeric chars, dots, dashes, and underscores
+    clean_name = re.sub(r'[^a-zA-Z0-9.\-_]', '_', filename)
+    # Prevent directory traversal attempts
+    clean_name = clean_name.replace('..', '_')
+    # Prevent empty filename or just extension
+    if not clean_name or clean_name.startswith('.'):
+        clean_name = "unnamed_file" + (clean_name if '.' in clean_name else "")
+    # Restrict length
+    return clean_name[:255]
 
 
 def _validate_files(files: list[dict]) -> str | None:
@@ -165,7 +181,7 @@ async def _parse_and_save_files(files: list[dict], user_id: str | None,
 
 
 @router.websocket("/ws/analyze")
-async def ws_analyze(ws: WebSocket):
+async def ws_analyze(ws: WebSocket, token: str | None = None, enc_key: str | None = None):
     client_ip = _get_client_ip(ws)
 
     # Enforce per-IP connection limit
@@ -173,32 +189,34 @@ async def ws_analyze(ws: WebSocket):
         await ws.close(code=4029, reason="Too many connections")
         return
 
+    # Authenticate before accepting connection
+    user_info = None
+    if token:
+        user_info = await get_user_from_token(token)
+        if user_info is None:
+            await ws.close(code=4001, reason="Invalid token")
+            release_ws_connection(client_ip)
+            return
+
     await ws.accept()
     session_id = uuid.uuid4().hex
     session = Session(session_id=session_id)
+    
+    if user_info:
+        session.user_id = user_info["id"]
+        if enc_key:
+            session.encryption_key = base64.b64decode(enc_key)
+        logger.info(f"Authenticated WebSocket session for user {session.user_id}")
+        
     sessions[session_id] = session
 
     try:
-        # Step 1: Receive initial message (includes auth credentials in body)
+        # Step 1: Receive initial message
         try:
             msg = await _receive_json(ws)
         except (json.JSONDecodeError, asyncio.TimeoutError):
             await send_json(ws, {"type": "error", "message": "Invalid or missing initial message"})
             return
-
-        # Authenticate from message body (not query params)
-        token = msg.get("token")
-        if token:
-            user_info = await get_user_from_token(token)
-            if user_info is None:
-                await send_json(ws, {"type": "error", "message": "Invalid or expired token"})
-                await ws.close(code=4001, reason="Invalid token")
-                return
-            session.user_id = user_info["id"]
-            enc_key_b64 = msg.get("enc_key")
-            if enc_key_b64:
-                session.encryption_key = base64.b64decode(enc_key_b64)
-            logger.info(f"Authenticated WebSocket session for user {session.user_id}")
 
         t0 = time.time()
         language = msg.get("language", "en")
@@ -218,6 +236,8 @@ async def ws_analyze(ws: WebSocket):
 
             # Validate new files if any
             if new_files:
+                for f in new_files:
+                    f["name"] = sanitize_filename(f.get("name", "unnamed"))
                 file_error = _validate_files(new_files)
                 if file_error:
                     await send_json(ws, {"type": "error", "message": file_error})
@@ -259,6 +279,8 @@ async def ws_analyze(ws: WebSocket):
 
         elif msg_type == "upload_files" and msg.get("files"):
             files = msg["files"]
+            for f in files:
+                f["name"] = sanitize_filename(f.get("name", "unnamed"))
 
             # Validate file count and sizes
             file_error = _validate_files(files)
@@ -330,6 +352,8 @@ async def ws_analyze(ws: WebSocket):
 
                 if resp_msg.get("type") == "upload_files" and resp_msg.get("files"):
                     new_files = resp_msg["files"]
+                    for f in new_files:
+                        f["name"] = sanitize_filename(f.get("name", "unnamed"))
                     file_error = _validate_files(new_files)
                     if file_error:
                         await send_json(ws, {"type": "error", "message": file_error})
