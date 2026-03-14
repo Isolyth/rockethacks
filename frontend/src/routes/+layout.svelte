@@ -64,7 +64,8 @@
 	.header-content {
 		max-width: 1400px;
 		margin: 0 auto;
-		padding: 1rem 1.5rem;
+		padding: 0.5rem 1.5rem;
+		height: 56px;
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
@@ -77,7 +78,7 @@
 	}
 
 	.logo img {
-		height: 48px;
+		height: 100%;
 		width: auto;
 	}
 
