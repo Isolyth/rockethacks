@@ -118,29 +118,57 @@ export async function deleteStatement(token: string, statementId: string): Promi
 	if (!resp.ok) throw new Error('Failed to delete statement');
 }
 
-export async function sendFollowup(
+export async function streamFollowup(
 	token: string | null,
 	reportData: FinancialReport,
 	prompt: string,
 	history: { role: string; content: string }[] = [],
-	language: string = 'en'
-): Promise<{ message: string; podcast_script?: string }> {
-	const headers = token ? authHeaders(token) : {};
-	const resp = await apiFetch('/analyze/follow-up', {
-		method: 'POST',
-		headers,
-		body: JSON.stringify({
-			report_data: reportData,
-			prompt,
-			history,
-			language
-		})
-	});
-	if (!resp.ok) {
-		const err = await resp.json().catch(() => ({ detail: 'Failed to process follow-up' }));
-		throw new Error(err.detail || 'Failed to process follow-up');
+	language: string = 'en',
+	callbacks: {
+		onChunk: (text: string) => void;
+		onDone: (fullText: string, podcastScript?: string) => void;
+		onError: (message: string) => void;
 	}
-	return resp.json();
+): Promise<void> {
+	const hdrs: Record<string, string> = { 'Content-Type': 'application/json' };
+	if (token) hdrs['Authorization'] = `Bearer ${token}`;
+
+	const resp = await fetch(`${API_URL}/analyze/follow-up`, {
+		method: 'POST',
+		headers: hdrs,
+		body: JSON.stringify({ report_data: reportData, prompt, history, language })
+	});
+
+	if (!resp.ok) {
+		const err = await resp.json().catch(() => ({ detail: 'Request failed' }));
+		callbacks.onError(err.detail || 'Request failed');
+		return;
+	}
+
+	const reader = resp.body!.getReader();
+	const decoder = new TextDecoder();
+	let buffer = '';
+
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		buffer += decoder.decode(value, { stream: true });
+
+		const parts = buffer.split('\n\n');
+		buffer = parts.pop()!;
+
+		for (const part of parts) {
+			if (!part.startsWith('data: ')) continue;
+			try {
+				const data = JSON.parse(part.slice(6));
+				if (data.type === 'chunk') callbacks.onChunk(data.text);
+				else if (data.type === 'done') callbacks.onDone(data.full_text, data.podcast_script);
+				else if (data.type === 'error') callbacks.onError(data.message);
+			} catch {
+				// skip malformed SSE
+			}
+		}
+	}
 }
 
 // --- WebSocket analysis ---

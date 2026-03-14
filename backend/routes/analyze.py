@@ -479,43 +479,44 @@ async def ws_analyze(ws: WebSocket):
 _followup_limiter = RateLimiter(max_requests=20, window_seconds=60)
 
 
-@router.post("/analyze/follow-up", response_model=FollowUpResponse)
+@router.post("/analyze/follow-up")
 async def analyze_followup(request: FollowUpRequest, raw_request: Request):
-    """Generate a conversational follow-up response based on user prompt and history."""
-    from services.gemini import generate_followup_chat, generate_followup_podcast_script
+    """Stream a follow-up response via SSE."""
+    from starlette.responses import StreamingResponse
+    from services.gemini import generate_followup_chat_stream, generate_followup_podcast_script
 
-    # Rate limit by IP
     client_ip = raw_request.client.host if raw_request.client else "unknown"
     if not _followup_limiter.is_allowed(client_ip):
         raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
 
-    try:
+    async def event_stream():
         t0 = time.time()
-        logger.info(f"=== POST /analyze/follow-up lang={request.language} ===")
+        logger.info(f"=== POST /analyze/follow-up (stream) lang={request.language} ===")
+        full_text = ""
 
-        ai_message = await generate_followup_chat(
-            report_data=request.report_data,
-            prompt=request.prompt,
-            history=request.history,
-            language=request.language
-        )
-        logger.info(f"  [1/2] Follow-up chat done ({time.time() - t0:.1f}s)")
+        try:
+            async for chunk in generate_followup_chat_stream(
+                report_data=request.report_data,
+                prompt=request.prompt,
+                history=request.history,
+                language=request.language,
+            ):
+                full_text += chunk
+                yield f"data: {json.dumps({'type': 'chunk', 'text': chunk})}\n\n"
 
-        t1 = time.time()
-        podcast_script_update = await generate_followup_podcast_script(
-            ai_response=ai_message,
-            prompt=request.prompt,
-            language=request.language
-        )
-        logger.info(f"  [2/2] Follow-up script done ({time.time() - t1:.1f}s)")
+            logger.info(f"  [1/2] Follow-up stream done ({time.time() - t0:.1f}s)")
 
-        return FollowUpResponse(
-            message=ai_message,
-            podcast_script=podcast_script_update,
-        )
+            t1 = time.time()
+            podcast_script = await generate_followup_podcast_script(
+                ai_response=full_text,
+                prompt=request.prompt,
+                language=request.language,
+            )
+            logger.info(f"  [2/2] Follow-up script done ({time.time() - t1:.1f}s)")
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error during follow-up chat: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
+            yield f"data: {json.dumps({'type': 'done', 'full_text': full_text, 'podcast_script': podcast_script})}\n\n"
+        except Exception as e:
+            logger.error(f"Error during follow-up stream: {e}", exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'message': 'An internal error occurred.'})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")

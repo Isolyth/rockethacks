@@ -6,6 +6,7 @@
 	import { auth, isAuthenticated } from '$lib/stores/auth.svelte';
 	import Report from '$lib/components/Report.svelte';
 	import PodcastPlayer from '$lib/components/PodcastPlayer.svelte';
+	import AdvisorChat from '$lib/components/AdvisorChat.svelte';
 	import type { ReportDetail } from '$lib/types';
 
 	let reportData = $state<ReportDetail | null>(null);
@@ -72,6 +73,7 @@
 					audioUrl={reportData.audio_url}
 					sentences={reportData.sentences}
 				/>
+				<AdvisorChat report={reportData.report} language={reportData.language} />
 			</div>
 		</div>
 

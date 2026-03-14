@@ -7,6 +7,7 @@
 	import DocumentRequestCard from "$lib/components/DocumentRequest.svelte";
 	import QuestionCard from "$lib/components/QuestionCard.svelte";
 	import ThinkingIndicator from "$lib/components/ThinkingIndicator.svelte";
+	import AdvisorChat from "$lib/components/AdvisorChat.svelte";
 	import { startAnalysis, type AnalysisHandle } from "$lib/api";
 	import { auth } from "$lib/stores/auth.svelte";
 	import type {
@@ -227,6 +228,9 @@
 							audioBase64={podcastAudio.audio_base64}
 							sentences={podcastAudio.sentences}
 						/>
+					{/if}
+					{#if appState === "done" && report}
+						<AdvisorChat {report} />
 					{/if}
 				</div>
 			</div>

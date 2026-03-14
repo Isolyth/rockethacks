@@ -650,7 +650,8 @@ async def generate_podcast_script(report: dict, language: str = "en") -> str:
     return response.text
 
 
-async def generate_followup_chat(report_data: dict, prompt: str, history: list, language: str = "en") -> str:
+def _build_followup_contents(report_data: dict, prompt: str, history: list, language: str = "en"):
+    """Build the contents list for a follow-up chat call."""
     from string import Template
     import json
 
@@ -660,48 +661,56 @@ async def generate_followup_chat(report_data: dict, prompt: str, history: list, 
         language_instruction=lang_instruction,
     )
 
-    # Build the history
-    # Gemini models.generate_content takes `contents` which is a list of types.Content
-    contents = []
-    contents.append(
-        types.Content(
-            role="user",
-            parts=[types.Part.from_text(text=system_prompt)]
-        )
-    )
-    contents.append(
-        types.Content(
-            role="model",
-            parts=[types.Part.from_text(text="Understood. I'm ready to help.")]
-        )
-    )
-    
+    contents = [
+        types.Content(role="user", parts=[types.Part.from_text(text=system_prompt)]),
+        types.Content(role="model", parts=[types.Part.from_text(text="Understood. I'm ready to help.")]),
+    ]
+
     for msg in history:
-        # History messages are parsed as ChatMessage pydantic models
         role = "user" if getattr(msg, 'role', 'user') == 'user' else "model"
         content = getattr(msg, 'content', '')
-        contents.append(
-            types.Content(
-                role=role,
-                parts=[types.Part.from_text(text=content)]
-            )
-        )
+        contents.append(types.Content(role=role, parts=[types.Part.from_text(text=content)]))
 
-    # Add the current prompt
-    contents.append(
-        types.Content(
-            role="user",
-            parts=[types.Part.from_text(text=prompt)]
-        )
-    )
+    contents.append(types.Content(role="user", parts=[types.Part.from_text(text=prompt)]))
+    return contents
 
+
+async def generate_followup_chat(report_data: dict, prompt: str, history: list, language: str = "en") -> str:
+    contents = _build_followup_contents(report_data, prompt, history, language)
     response = await asyncio.to_thread(
-        client.models.generate_content,
-        model=MODEL,
-        contents=contents,
+        client.models.generate_content, model=MODEL, contents=contents,
     )
-
     return response.text
+
+
+async def generate_followup_chat_stream(report_data: dict, prompt: str, history: list, language: str = "en"):
+    """Async generator yielding text chunks from a streaming follow-up chat."""
+    import threading
+
+    contents = _build_followup_contents(report_data, prompt, history, language)
+    loop = asyncio.get_event_loop()
+    q: asyncio.Queue[str | None] = asyncio.Queue()
+
+    def _run():
+        try:
+            for chunk in client.models.generate_content_stream(
+                model=MODEL, contents=contents,
+            ):
+                if chunk.text:
+                    loop.call_soon_threadsafe(q.put_nowait, chunk.text)
+        except Exception as e:
+            logger.error(f"Followup stream error: {e}")
+        finally:
+            loop.call_soon_threadsafe(q.put_nowait, None)
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+
+    while True:
+        item = await q.get()
+        if item is None:
+            break
+        yield item
 
 
 async def generate_followup_podcast_script(ai_response: str, prompt: str, language: str = "en") -> str:
