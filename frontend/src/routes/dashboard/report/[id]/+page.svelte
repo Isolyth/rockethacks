@@ -70,7 +70,7 @@
 					podcastScript={reportData.podcast_script}
 					audioBase64={null}
 					audioUrl={reportData.audio_url}
-					sentences={[]}
+					sentences={reportData.sentences}
 				/>
 			</div>
 		</div>

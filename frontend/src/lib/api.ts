@@ -124,6 +124,7 @@ interface AnalysisOptions {
 	files: File[];
 	language: string;
 	token?: string | null;
+	encryptionKey?: string | null;
 	savedStatementIds?: string[];
 	onProgress: (event: ProgressEvent) => void;
 	onReportReady: (report: FinancialReport) => void;
@@ -136,7 +137,13 @@ interface AnalysisOptions {
 
 export function startAnalysis(opts: AnalysisOptions): AnalysisHandle {
 	const baseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/analyze';
-	const wsUrl = opts.token ? `${baseUrl}?token=${opts.token}` : baseUrl;
+	let wsUrl = baseUrl;
+	if (opts.token) {
+		wsUrl += `?token=${opts.token}`;
+		if (opts.encryptionKey) {
+			wsUrl += `&enc_key=${encodeURIComponent(opts.encryptionKey)}`;
+		}
+	}
 	const ws = new WebSocket(wsUrl);
 	let open = false;
 

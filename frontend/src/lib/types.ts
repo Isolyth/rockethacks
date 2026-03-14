@@ -102,6 +102,7 @@ export interface UserResponse {
 export interface AuthResponse {
 	token: string;
 	user: UserResponse;
+	encryption_key: string | null;
 }
 
 export interface ReportSummaryItem {
@@ -122,6 +123,7 @@ export interface ReportDetail {
 	report: FinancialReport;
 	podcast_script: string;
 	audio_url: string | null;
+	sentences: { text: string; start: number; end: number }[];
 	statements: { id: string; filename: string; file_type: string }[];
 }
 

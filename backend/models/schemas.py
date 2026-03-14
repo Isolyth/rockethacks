@@ -85,6 +85,7 @@ class UserResponse(BaseModel):
 class AuthResponse(BaseModel):
     token: str
     user: UserResponse
+    encryption_key: str | None = None
 
 
 class ReportSummaryItem(BaseModel):
@@ -105,6 +106,7 @@ class ReportDetail(BaseModel):
     report: FinancialReport
     podcast_script: str
     audio_url: str | None = None
+    sentences: list[dict] = []
     statements: list[dict] = []
 
 

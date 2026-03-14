@@ -56,6 +56,7 @@ async def get_report_detail(report_id: str, user: dict = Depends(get_current_use
         report=item["report"],
         podcast_script=item.get("podcast_script", ""),
         audio_url=audio_url,
+        sentences=item.get("sentences", []),
         statements=stmt_list,
     )
 
