@@ -9,7 +9,7 @@
 	import ThinkingIndicator from "$lib/components/ThinkingIndicator.svelte";
 	import AdvisorChat from "$lib/components/AdvisorChat.svelte";
 	import { startAnalysis, type AnalysisHandle } from "$lib/api";
-	import { auth } from "$lib/stores/auth.svelte";
+	import { auth, isAuthenticated } from "$lib/stores/auth.svelte";
 	import type {
 		AppState,
 		ProgressEvent,
@@ -38,6 +38,13 @@
 		appState === "processing" && report !== null,
 	);
 	let showHero = $derived(!guestMode && !auth.loading && !auth.user);
+
+	// Redirect authenticated users straight to dashboard
+	$effect(() => {
+		if (!auth.loading && isAuthenticated() && !guestMode && appState === "idle") {
+			goto("/dashboard");
+		}
+	});
 
 	function handleUpload(files: File[], language: string) {
 		appState = "processing";
@@ -172,19 +179,6 @@
 					>
 					<button class="ghost-btn" onclick={() => (guestMode = true)}
 						>Continue as Guest</button
-					>
-				</div>
-			</div>
-		{:else if auth.user && !guestMode && appState === "idle"}
-			<div class="hero">
-				<img src="/logo.svg" alt="Easy MonAI" class="hero-logo" />
-				<p class="tagline">Welcome back, {auth.user.display_name}!</p>
-				<div class="hero-actions">
-					<button class="primary-btn" onclick={() => goto("/analyze")}
-						>New Analysis</button
-					>
-					<button class="ghost-btn" onclick={() => goto("/dashboard")}
-						>View Dashboard</button
 					>
 				</div>
 			</div>
