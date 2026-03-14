@@ -1,23 +1,18 @@
 import asyncio
 import json
 import logging
-import os
 
-from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
+from config import GEMINI_API_KEY, GEMINI_MODEL, MAX_DOCUMENT_REQUESTS
 from services.session import Session
-
-load_dotenv()
 
 logger = logging.getLogger("uvicorn.error")
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+client = genai.Client(api_key=GEMINI_API_KEY)
 
-MODEL = "gemini-2.5-flash"
-
-MAX_DOCUMENT_REQUESTS = int(os.getenv("MAX_DOCUMENT_REQUESTS", "3"))
+MODEL = GEMINI_MODEL
 
 MULTI_DOC_REMINDER = """
 IMPORTANT: You are receiving $file_count separate bank statement documents. They are separated by "--- filename ---" markers. Treat them as one combined financial picture — merge all transactions together when calculating totals, categories, and trends. Do not analyze them separately.
@@ -57,6 +52,8 @@ $language_instruction
 
 3. **finish** — Use this when you have enough data and context to produce a comprehensive report. Call this with the complete financial report JSON.
 
+4. **search_web** — Search the web for current financial data, benchmark comparisons, average spending statistics, or relevant context. Use this to ground your insights in real data — for example, comparing the user's savings rate to the national average, or referencing current interest rates. Provide a specific search query.
+
 ## Report format
 
 When calling finish, provide a report object with this exact structure:
@@ -90,6 +87,7 @@ Categories should include things like: Food & Dining, Transportation, Shopping, 
 - You may make at most $max_requests total interactions (document requests + questions combined).
 - If the user declines or skips, proceed with what you have.
 - Incorporate user answers into your insights and recommendations.
+- You can reference external data (market rates, national averages, benchmarks) — the system will search for this automatically. When citing external data in insights, be specific.
 
 Bank statement data:
 ---
@@ -123,6 +121,15 @@ $report_json
 """
 
 # Tool declarations for the agentic loop
+#
+# NOTE: google_search (GoogleSearch tool) cannot be passed alongside
+# function_declarations in the same API request — the Gemini API rejects the
+# combination. To work around this, search_web is declared as a regular
+# function that the agent can call. When invoked, _do_grounded_search() makes
+# a *separate* Gemini API call with only GoogleSearch enabled, then returns
+# the grounded text and source metadata back to the agent as a function
+# response. This lets the agent decide when to search while keeping
+# function_declarations intact for the agentic loop.
 REPORT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -232,35 +239,25 @@ FINISH_DECL = types.FunctionDeclaration(
     },
 )
 
-AGENT_TOOLS = [types.Tool(function_declarations=[REQUEST_DOCUMENTS_DECL, ASK_QUESTION_DECL, FINISH_DECL])]
+SEARCH_WEB_DECL = types.FunctionDeclaration(
+    name="search_web",
+    description="Search the web for current financial data, benchmarks, averages, or other relevant context to enrich the analysis.",
+    parameters=types.Schema(
+        type="OBJECT",
+        properties={
+            "query": types.Schema(
+                type="STRING",
+                description="The search query, e.g. 'average US savings rate 2024' or 'typical grocery spending per month'",
+            ),
+        },
+        required=["query"],
+    ),
+)
 
+AGENT_TOOLS = [types.Tool(function_declarations=[
+    REQUEST_DOCUMENTS_DECL, ASK_QUESTION_DECL, FINISH_DECL, SEARCH_WEB_DECL,
+])]
 
-async def _stream_and_collect(contents, config):
-    """Stream a Gemini response, yielding thinking chunks, and return the full response."""
-    collected_parts = []
-    response_content = None
-
-    for chunk in client.models.generate_content_stream(
-        model=MODEL,
-        contents=contents,
-        config=config,
-    ):
-        if not chunk.candidates:
-            continue
-        for part in chunk.candidates[0].content.parts:
-            if getattr(part, "thought", False) and part.text:
-                yield ("thinking", part.text)
-            elif part.function_call:
-                collected_parts.append(part)
-            elif part.text:
-                collected_parts.append(part)
-        response_content = chunk.candidates[0].content
-
-    # Yield the final collected response so caller can process tool calls
-    if response_content:
-        yield ("_response", response_content)
-    elif collected_parts:
-        yield ("_response", types.Content(role="model", parts=collected_parts))
 
 
 def _language_instruction(language: str) -> str:
@@ -269,6 +266,178 @@ def _language_instruction(language: str) -> str:
         return ""
     lang_name = LANGUAGE_NAMES.get(language, language)
     return f"IMPORTANT: You MUST write ALL of your output in {lang_name}. This includes questions, options, insights, category names, and the final report. The bank statement data may be in any language — always respond in {lang_name}."
+
+
+def _extract_grounding_data(grounding_metadata) -> dict | None:
+    """Convert GroundingMetadata to a serializable dict."""
+    if grounding_metadata is None:
+        return None
+
+    sources = []
+    if getattr(grounding_metadata, "grounding_chunks", None):
+        for chunk in grounding_metadata.grounding_chunks:
+            if getattr(chunk, "web", None):
+                sources.append({
+                    "uri": chunk.web.uri or "",
+                    "title": getattr(chunk.web, "title", None),
+                    "domain": getattr(chunk.web, "domain", None),
+                })
+
+    citations = []
+    if getattr(grounding_metadata, "grounding_supports", None):
+        for support in grounding_metadata.grounding_supports:
+            if getattr(support, "segment", None) and getattr(support, "grounding_chunk_indices", None):
+                citations.append({
+                    "text_segment": support.segment.text or "",
+                    "source_indices": list(support.grounding_chunk_indices),
+                })
+
+    search_entry_point_html = None
+    if getattr(grounding_metadata, "search_entry_point", None):
+        search_entry_point_html = getattr(
+            grounding_metadata.search_entry_point, "rendered_content", None
+        )
+
+    if not sources and not citations and not search_entry_point_html:
+        return None
+
+    return {
+        "sources": sources,
+        "citations": citations,
+        "search_entry_point_html": search_entry_point_html,
+    }
+
+
+def _deduplicate_sources(sources: list[dict], citations: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Deduplicate sources by URI and remap citation indices."""
+    seen: dict[str, int] = {}
+    deduped: list[dict] = []
+    index_map: dict[int, int] = {}
+
+    for old_idx, source in enumerate(sources):
+        uri = source.get("uri", "")
+        if uri in seen:
+            index_map[old_idx] = seen[uri]
+        else:
+            new_idx = len(deduped)
+            seen[uri] = new_idx
+            index_map[old_idx] = new_idx
+            deduped.append(source)
+
+    remapped_citations = []
+    for citation in citations:
+        remapped_citations.append({
+            "text_segment": citation["text_segment"],
+            "source_indices": [index_map.get(i, i) for i in citation["source_indices"]],
+        })
+
+    return deduped, remapped_citations
+
+
+async def _do_grounded_search(query: str) -> tuple[str, object | None]:
+    """Make a separate Gemini call with GoogleSearch grounding.
+
+    Returns (text_result, grounding_metadata).
+
+    google_search cannot be combined with function_declarations in the same
+    API request, so the agent declares search_web as a regular function and
+    this helper performs the actual grounded search in an isolated call.
+    """
+    try:
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model=MODEL,
+            contents=query,
+            config=types.GenerateContentConfig(
+                tools=[types.Tool(google_search=types.GoogleSearch())],
+            ),
+        )
+        text = response.text or ""
+        grounding_meta = None
+        if response.candidates:
+            grounding_meta = getattr(response.candidates[0], "grounding_metadata", None)
+        return text, grounding_meta
+    except Exception as e:
+        logger.warning(f"  Grounded search failed: {e}")
+        return f"Search failed: {e}", None
+
+
+async def _handle_search_web(query, contents, response_content,
+                             all_grounding_sources, all_grounding_citations,
+                             search_entry_point_html):
+    """Perform a grounded search, accumulate grounding data, and append to contents."""
+    search_result, grounding_meta = await _do_grounded_search(query)
+
+    if grounding_meta:
+        gd = _extract_grounding_data(grounding_meta)
+        if gd:
+            offset = len(all_grounding_sources)
+            all_grounding_sources.extend(gd["sources"])
+            for citation in gd["citations"]:
+                citation["source_indices"] = [i + offset for i in citation["source_indices"]]
+            all_grounding_citations.extend(gd["citations"])
+            if gd["search_entry_point_html"]:
+                search_entry_point_html = gd["search_entry_point_html"]
+
+    func_response = types.Part.from_function_response(
+        name="search_web",
+        response={"result": search_result},
+    )
+    contents.append(response_content)
+    contents.append(types.Content(role="user", parts=[func_response]))
+    return search_entry_point_html
+
+
+def _build_interaction_event(fc):
+    """Return the appropriate event tuple for a request_documents or ask_question tool call."""
+    if fc.name == "request_documents":
+        return ("request_documents", {
+            "document_type": fc.args["document_type"],
+            "reason": fc.args["reason"],
+        })
+    return ("ask_question", {
+        "question": fc.args["question"],
+        "options": fc.args.get("options", []),
+    })
+
+
+def _handle_interaction_response(fc, session, contents, response_content,
+                                  interaction_count, max_requests):
+    """Process user response for request_documents or ask_question and append to contents."""
+    user_response = session.user_response
+    session.user_response = None
+
+    if fc.name == "request_documents":
+        logger.info(f"  Agent requesting document: {fc.args['document_type']} (interaction {interaction_count}/{max_requests})")
+        if user_response and user_response.get("action") == "upload":
+            additional_text = user_response.get("document_text", "")
+            func_response = types.Part.from_function_response(
+                name="request_documents",
+                response={"result": f"User provided additional document:\n{additional_text}"},
+            )
+        else:
+            func_response = types.Part.from_function_response(
+                name="request_documents",
+                response={"result": "User declined to provide this document. Proceed with available data."},
+            )
+    else:
+        answer = (user_response or {}).get("answer", "No answer provided")
+        logger.info(f"  Agent asking question: {fc.args['question']} (interaction {interaction_count}/{max_requests})")
+        func_response = types.Part.from_function_response(
+            name="ask_question",
+            response={"result": f"User answered: {answer}"},
+        )
+
+    contents.append(response_content)
+    contents.append(types.Content(role="user", parts=[func_response]))
+
+    if interaction_count >= max_requests:
+        contents.append(
+            types.Content(
+                role="user",
+                parts=[types.Part.from_text(text="You have used all your interaction requests. Please call finish now with the best report you can produce from the available data.")],
+            )
+        )
 
 
 async def analyze_with_gemini_agent(
@@ -300,7 +469,23 @@ async def analyze_with_gemini_agent(
     )
 
     interaction_count = 0
-    max_iterations = max_requests + 3  # safety cap
+    max_iterations = max_requests + 5  # safety cap (extra room for search iterations)
+
+    # Accumulate grounding data across iterations
+    all_grounding_sources: list[dict] = []
+    all_grounding_citations: list[dict] = []
+    search_entry_point_html: str | None = None
+
+    def _attach_grounding(report_data: dict) -> dict:
+        """Attach accumulated grounding data to a report dict."""
+        if all_grounding_sources:
+            sources, citations = _deduplicate_sources(all_grounding_sources, all_grounding_citations)
+            report_data["grounding"] = {
+                "sources": sources,
+                "citations": citations,
+                "search_entry_point_html": search_entry_point_html,
+            }
+        return report_data
 
     for iteration in range(max_iterations):
         logger.info(f"  Agent loop iteration {iteration + 1}")
@@ -326,7 +511,7 @@ async def analyze_with_gemini_agent(
             text_parts = [p.text for p in response_content.parts if p.text and not getattr(p, "thought", False)]
             full_text = "".join(text_parts)
             try:
-                yield ("result", json.loads(full_text))
+                yield ("result", _attach_grounding(json.loads(full_text)))
             except (json.JSONDecodeError, ValueError):
                 yield ("error", "Agent failed to produce a valid report")
             return
@@ -335,76 +520,28 @@ async def analyze_with_gemini_agent(
             if fc.name == "finish":
                 report_data = fc.args.get("report", fc.args)
                 logger.info("  Agent called finish")
-                yield ("result", report_data)
+                yield ("result", _attach_grounding(report_data))
                 return
 
-            elif fc.name == "request_documents":
-                interaction_count += 1
-                doc_type = fc.args["document_type"]
-                reason = fc.args["reason"]
-                logger.info(f"  Agent requesting document: {doc_type} (interaction {interaction_count}/{max_requests})")
+            elif fc.name == "search_web":
+                query = fc.args.get("query", "")
+                logger.info(f"  Agent searching web: {query}")
+                yield ("thinking", f"Searching the web: {query}")
 
-                # Yield pauses this generator. The route handler will set
-                # session.user_response before resuming us (by requesting
-                # the next item from the generator).
-                yield ("request_documents", {"document_type": doc_type, "reason": reason})
-
-                user_response = session.user_response
-                session.user_response = None
-
-                if user_response and user_response.get("action") == "upload":
-                    additional_text = user_response.get("document_text", "")
-                    func_response = types.Part.from_function_response(
-                        name="request_documents",
-                        response={"result": f"User provided additional document:\n{additional_text}"},
-                    )
-                else:
-                    func_response = types.Part.from_function_response(
-                        name="request_documents",
-                        response={"result": "User declined to provide this document. Proceed with available data."},
-                    )
-
-                contents.append(response_content)
-                contents.append(types.Content(role="user", parts=[func_response]))
-
-                if interaction_count >= max_requests:
-                    contents.append(
-                        types.Content(
-                            role="user",
-                            parts=[types.Part.from_text(text="You have used all your interaction requests. Please call finish now with the best report you can produce from the available data.")],
-                        )
-                    )
+                search_entry_point_html = await _handle_search_web(
+                    query, contents, response_content,
+                    all_grounding_sources, all_grounding_citations, search_entry_point_html,
+                )
                 break
 
-            elif fc.name == "ask_question":
+            elif fc.name in ("request_documents", "ask_question"):
                 interaction_count += 1
-                question = fc.args["question"]
-                options = fc.args.get("options", [])
-                logger.info(f"  Agent asking question: {question} (interaction {interaction_count}/{max_requests})")
-
-                # Same pattern: yield pauses, route handler sets
-                # session.user_response before resuming.
-                yield ("ask_question", {"question": question, "options": options})
-
-                user_response = session.user_response
-                session.user_response = None
-
-                answer = (user_response or {}).get("answer", "No answer provided")
-                func_response = types.Part.from_function_response(
-                    name="ask_question",
-                    response={"result": f"User answered: {answer}"},
+                event = _build_interaction_event(fc)
+                yield event
+                _handle_interaction_response(
+                    fc, session, contents, response_content,
+                    interaction_count, max_requests,
                 )
-
-                contents.append(response_content)
-                contents.append(types.Content(role="user", parts=[func_response]))
-
-                if interaction_count >= max_requests:
-                    contents.append(
-                        types.Content(
-                            role="user",
-                            parts=[types.Part.from_text(text="You have used all your interaction requests. Please call finish now with the best report you can produce from the available data.")],
-                        )
-                    )
                 break
 
     yield ("error", "Agent exceeded maximum iterations")
@@ -412,13 +549,14 @@ async def analyze_with_gemini_agent(
 
 async def _stream_via_thread(contents, config):
     """Run the synchronous streaming generator in a thread and yield events."""
-    import queue
     import threading
 
-    q = queue.Queue()
+    loop = asyncio.get_event_loop()
+    q = asyncio.Queue()
 
     def _run():
         try:
+            collected_parts = []
             for chunk in client.models.generate_content_stream(
                 model=MODEL,
                 contents=contents,
@@ -428,41 +566,36 @@ async def _stream_via_thread(contents, config):
                     continue
                 for part in chunk.candidates[0].content.parts:
                     if getattr(part, "thought", False) and part.text:
-                        q.put(("thinking", part.text))
-                # Always put the latest content as the response
-                q.put(("_chunk_content", chunk.candidates[0].content))
+                        loop.call_soon_threadsafe(q.put_nowait, ("thinking", part.text))
+                    else:
+                        # Accumulate non-thought parts (function calls, text)
+                        # so they aren't lost when later chunks only have thoughts
+                        collected_parts.append(part)
+            loop.call_soon_threadsafe(q.put_nowait, ("_collected_parts", collected_parts))
         except Exception as e:
-            q.put(("_error", str(e)))
+            loop.call_soon_threadsafe(q.put_nowait, ("_error", str(e)))
         finally:
-            q.put(None)  # sentinel
+            loop.call_soon_threadsafe(q.put_nowait, None)  # sentinel
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
 
-    last_content = None
+    collected_parts = []
     while True:
-        # Poll queue without blocking the event loop
-        while True:
-            try:
-                item = q.get_nowait()
-                break
-            except queue.Empty:
-                await asyncio.sleep(0.05)
-                continue
-
+        item = await q.get()
         if item is None:
             break
         event_type, event_data = item
         if event_type == "thinking":
             yield ("thinking", event_data)
-        elif event_type == "_chunk_content":
-            last_content = event_data
+        elif event_type == "_collected_parts":
+            collected_parts = event_data
         elif event_type == "_error":
             yield ("error", event_data)
             return
 
-    if last_content:
-        yield ("_response", last_content)
+    if collected_parts:
+        yield ("_response", types.Content(role="model", parts=collected_parts))
 
 
 async def generate_podcast_script(report: dict, language: str = "en") -> str:

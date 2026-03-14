@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { handleDrop as onDrop, handleFileSelect as onFileSelect, filterValidFiles, formatSize } from '$lib/utils/file-upload';
+
 	let { onupload }: { onupload: (files: File[], language: string) => void } = $props();
 
 	const languages = [
@@ -23,12 +25,17 @@
 	let dragging = $state(false);
 	let fileInput: HTMLInputElement;
 
+	function addFiles(newFiles: File[]) {
+		files = [...files, filterValidFiles(newFiles)].flat();
+	}
+
+	function removeFile(index: number) {
+		files = files.filter((_, i) => i !== index);
+	}
+
 	function handleDrop(e: DragEvent) {
-		e.preventDefault();
 		dragging = false;
-		if (e.dataTransfer?.files) {
-			addFiles(Array.from(e.dataTransfer.files));
-		}
+		onDrop(e, addFiles);
 	}
 
 	function handleDragOver(e: DragEvent) {
@@ -38,31 +45,6 @@
 
 	function handleDragLeave() {
 		dragging = false;
-	}
-
-	function handleFileSelect(e: Event) {
-		const input = e.target as HTMLInputElement;
-		if (input.files) {
-			addFiles(Array.from(input.files));
-			input.value = '';
-		}
-	}
-
-	function addFiles(newFiles: File[]) {
-		const valid = newFiles.filter(
-			(f) => f.name.toLowerCase().endsWith('.pdf') || f.name.toLowerCase().endsWith('.csv')
-		);
-		files = [...files, ...valid];
-	}
-
-	function removeFile(index: number) {
-		files = files.filter((_, i) => i !== index);
-	}
-
-	function formatSize(bytes: number): string {
-		if (bytes < 1024) return bytes + ' B';
-		if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-		return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 	}
 </script>
 
@@ -92,7 +74,7 @@
 		type="file"
 		accept=".pdf,.csv"
 		multiple
-		onchange={handleFileSelect}
+		onchange={(e) => onFileSelect(e, addFiles)}
 		hidden
 	/>
 

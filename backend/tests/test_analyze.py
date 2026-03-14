@@ -1,155 +1,404 @@
-import json
-from unittest.mock import AsyncMock, patch
+"""Tests for routes/analyze.py — WebSocket endpoint and helpers."""
 
+import base64
+import json
 import pytest
-from fastapi.testclient import TestClient
+from unittest.mock import patch, MagicMock, AsyncMock
+
+from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from main import app
-
-MOCK_REPORT = {
-    "summary": {
-        "total_income": 5000.0,
-        "total_expenses": 3200.0,
-        "net_savings": 1800.0,
-        "date_range": "2024-01-01 to 2024-01-31",
-    },
-    "categories": [
-        {"name": "Food & Dining", "total": 800.0, "percentage": 25.0, "transactions": 15},
-    ],
-    "top_merchants": [
-        {"name": "Starbucks", "total": 120.0, "count": 10},
-    ],
-    "insights": ["You spend 25% on food"],
-    "monthly_trend": [
-        {"month": "2024-01", "income": 5000.0, "expenses": 3200.0},
-    ],
-}
-
-MOCK_PODCAST = "Welcome to your financial podcast! Let's dive into your spending."
+from routes.analyze import parse_file_data, send_json
+from tests.conftest import VALID_REPORT_DATA, MOCK_PODCAST_SCRIPT
 
 
-def parse_sse_events(raw: str) -> list[dict]:
-    """Parse raw SSE text into a list of {event, data} dicts."""
-    events = []
-    # Normalize line endings
-    raw = raw.replace("\r\n", "\n").replace("\r", "\n")
-    for block in raw.split("\n\n"):
-        if not block.strip():
-            continue
-        event_type = ""
-        data_lines = []
-        for line in block.split("\n"):
-            if line.startswith("event:"):
-                event_type = line[6:].strip()
-            elif line.startswith("data:"):
-                data_lines.append(line[5:])
-            # Skip comment lines (: ping, etc.)
-        if data_lines:
-            data_str = "\n".join(data_lines).strip()
-            try:
-                data = json.loads(data_str)
-            except json.JSONDecodeError:
-                data = data_str
-            events.append({"event": event_type, "data": data})
-    return events
+# ── parse_file_data ──────────────────────────────────────────────────────────
+
+class TestParseFileData:
+    def test_csv_file(self):
+        result = parse_file_data("statement.csv", b"date,amount\n2024-01-01,50")
+        assert result is not None
+        assert "date,amount" in result
+
+    def test_pdf_file(self):
+        with patch("routes.analyze.parse_pdf") as mock_parse:
+            mock_parse.return_value = "PDF content"
+            result = parse_file_data("statement.pdf", b"fake pdf")
+            assert result == "PDF content"
+
+    def test_uppercase_csv(self):
+        result = parse_file_data("STATEMENT.CSV", b"a,b\n1,2")
+        assert result is not None
+
+    def test_uppercase_pdf(self):
+        with patch("routes.analyze.parse_pdf", return_value="text"):
+            result = parse_file_data("STATEMENT.PDF", b"fake")
+            assert result == "text"
+
+    def test_unsupported_txt(self):
+        result = parse_file_data("notes.txt", b"hello")
+        assert result is None
+
+    def test_unsupported_xlsx(self):
+        result = parse_file_data("data.xlsx", b"binary")
+        assert result is None
+
+    def test_unsupported_no_extension(self):
+        result = parse_file_data("file", b"data")
+        assert result is None
+
+    def test_mixed_case_extension(self):
+        result = parse_file_data("data.CsV", b"a,b\n1,2")
+        assert result is not None
 
 
-@patch("routes.analyze.generate_podcast_script", new_callable=AsyncMock, return_value=MOCK_PODCAST)
-@patch("routes.analyze.analyze_with_gemini", new_callable=AsyncMock, return_value=MOCK_REPORT)
-def test_analyze_csv_success(mock_gemini, mock_podcast):
-    client = TestClient(app)
-    csv_content = b"date,amount,description\n2024-01-01,50.00,Coffee"
+# ── send_json ────────────────────────────────────────────────────────────────
 
-    with client.stream("POST", "/analyze", files=[("files", ("test.csv", csv_content, "text/csv"))]) as resp:
-        assert resp.status_code == 200
-        assert "text/event-stream" in resp.headers["content-type"]
-        raw = resp.read().decode()
+class TestSendJson:
+    @pytest.mark.asyncio
+    async def test_sends_json_text(self):
+        mock_ws = AsyncMock()
+        await send_json(mock_ws, {"type": "progress", "step": "parsing"})
+        mock_ws.send_text.assert_called_once()
+        sent = json.loads(mock_ws.send_text.call_args[0][0])
+        assert sent["type"] == "progress"
+        assert sent["step"] == "parsing"
 
-    events = parse_sse_events(raw)
-    event_types = [e["event"] for e in events]
-
-    # Must have progress events for each step and a final result
-    assert "progress" in event_types
-    assert "result" in event_types
-
-    # Check progress steps appear in order
-    progress_steps = [e["data"]["step"] for e in events if e["event"] == "progress"]
-    assert "parsing" in progress_steps
-    assert "analyzing" in progress_steps
-    assert "generating" in progress_steps
-    assert progress_steps.index("parsing") < progress_steps.index("analyzing") < progress_steps.index("generating")
-
-    # Check result event has expected fields
-    result_event = [e for e in events if e["event"] == "result"][0]
-    assert "report" in result_event["data"]
-    assert "podcast_script" in result_event["data"]
-    assert result_event["data"]["podcast_script"] == MOCK_PODCAST
+    @pytest.mark.asyncio
+    async def test_sends_nested_data(self):
+        mock_ws = AsyncMock()
+        data = {"type": "report_ready", "report": {"summary": {"total_income": 5000}}}
+        await send_json(mock_ws, data)
+        sent = json.loads(mock_ws.send_text.call_args[0][0])
+        assert sent["report"]["summary"]["total_income"] == 5000
 
 
-@patch("routes.analyze.generate_podcast_script", new_callable=AsyncMock, return_value=MOCK_PODCAST)
-@patch("routes.analyze.analyze_with_gemini", new_callable=AsyncMock, return_value=MOCK_REPORT)
-def test_analyze_multiple_files(mock_gemini, mock_podcast):
-    client = TestClient(app)
-    files = [
-        ("files", ("stmt1.csv", b"date,amount\n2024-01-01,50", "text/csv")),
-        ("files", ("stmt2.csv", b"date,amount\n2024-02-01,75", "text/csv")),
-    ]
+# ── Helper for WebSocket tests ──────────────────────────────────────────────
 
-    with client.stream("POST", "/analyze", files=files) as resp:
-        raw = resp.read().decode()
-
-    events = parse_sse_events(raw)
-    result_events = [e for e in events if e["event"] == "result"]
-    assert len(result_events) == 1
-
-    # Gemini should have been called with text from both files
-    call_text = mock_gemini.call_args[0][0]
-    assert "stmt1.csv" in call_text
-    assert "stmt2.csv" in call_text
+def _make_upload_msg(files, language="en"):
+    """Build an upload_files WebSocket message."""
+    file_list = []
+    for name, content in files:
+        file_list.append({
+            "name": name,
+            "content": base64.b64encode(content).decode(),
+        })
+    return json.dumps({"type": "upload_files", "files": file_list, "language": language})
 
 
-def test_analyze_unsupported_file_type():
-    client = TestClient(app)
+def _collect_ws_messages(ws, respond_to=None):
+    """Read all messages from a WebSocket until terminal event or disconnect.
 
-    with client.stream("POST", "/analyze", files=[("files", ("test.txt", b"hello", "text/plain"))]) as resp:
-        raw = resp.read().decode()
-
-    events = parse_sse_events(raw)
-    error_events = [e for e in events if e["event"] == "error"]
-    assert len(error_events) == 1
-    assert "Unsupported file type" in error_events[0]["data"]["message"]
-
-
-@patch("routes.analyze.analyze_with_gemini", new_callable=AsyncMock, side_effect=Exception("Gemini API error"))
-def test_analyze_gemini_failure(mock_gemini):
-    client = TestClient(app)
-
-    with client.stream("POST", "/analyze", files=[("files", ("test.csv", b"date,amount\n2024-01-01,50", "text/csv"))]) as resp:
-        raw = resp.read().decode()
-
-    events = parse_sse_events(raw)
-    error_events = [e for e in events if e["event"] == "error"]
-    assert len(error_events) == 1
-    assert "Gemini API error" in error_events[0]["data"]["message"]
+    respond_to: dict mapping message type to a callback(ws, msg) that sends a reply.
+    """
+    messages = []
+    respond_to = respond_to or {}
+    try:
+        for _ in range(100):  # safety limit
+            raw = ws.receive_text()
+            data = json.loads(raw)
+            messages.append(data)
+            # Handle interactive responses
+            if data["type"] in respond_to:
+                respond_to[data["type"]](ws, data)
+            # Terminal events
+            if data["type"] in ("podcast_audio_ready", "error"):
+                break
+    except WebSocketDisconnect:
+        pass
+    return messages
 
 
-def test_sse_wire_format():
-    """Verify the raw SSE format uses proper event: and data: prefixes with \\n separator."""
-    client = TestClient(app)
+# ── WebSocket /ws/analyze ────────────────────────────────────────────────────
 
-    with (
-        patch("routes.analyze.analyze_with_gemini", new_callable=AsyncMock, return_value=MOCK_REPORT),
-        patch("routes.analyze.generate_podcast_script", new_callable=AsyncMock, return_value=MOCK_PODCAST),
-    ):
-        with client.stream("POST", "/analyze", files=[("files", ("test.csv", b"a,b\n1,2", "text/csv"))]) as resp:
-            raw = resp.read().decode()
+class TestWsAnalyze:
+    def test_csv_full_pipeline(self):
+        """Happy path: CSV upload → progress → report → podcast."""
+        mock_audio = {
+            "audio_base64": "bW9ja2F1ZGlv",
+            "sentences": [{"text": "Hello.", "start": 0.0, "end": 1.0}],
+        }
 
-    # Every event block should have event: and data: lines
-    raw_normalized = raw.replace("\r\n", "\n").replace("\r", "\n")
-    blocks = [b for b in raw_normalized.split("\n\n") if b.strip()]
-    for block in blocks:
-        lines = block.strip().split("\n")
-        has_event = any(l.startswith("event:") for l in lines)
-        has_data = any(l.startswith("data:") for l in lines)
-        assert has_event, f"Block missing event: prefix: {block!r}"
-        assert has_data, f"Block missing data: prefix: {block!r}"
+        async def fake_agent(text, file_count, session, language="en", **kw):
+            yield ("result", VALID_REPORT_DATA)
+
+        with (
+            patch("routes.analyze.analyze_with_gemini_agent", side_effect=fake_agent),
+            patch("routes.analyze.generate_podcast_script", new_callable=AsyncMock, return_value=MOCK_PODCAST_SCRIPT),
+            patch("routes.analyze.generate_podcast_audio", new_callable=AsyncMock, return_value=mock_audio),
+        ):
+            client = TestClient(app)
+            with client.websocket_connect("/ws/analyze") as ws:
+                ws.send_text(_make_upload_msg([("test.csv", b"date,amount\n2024-01-01,50")]))
+                messages = _collect_ws_messages(ws)
+
+        types = [m["type"] for m in messages]
+        assert "progress" in types
+        assert "report_ready" in types
+        assert "podcast_audio_ready" in types
+
+        report_msg = next(m for m in messages if m["type"] == "report_ready")
+        assert report_msg["report"]["summary"]["total_income"] == 5000.0
+
+        audio_msg = next(m for m in messages if m["type"] == "podcast_audio_ready")
+        assert audio_msg["podcast_script"] == MOCK_PODCAST_SCRIPT
+        assert audio_msg["audio_base64"] == "bW9ja2F1ZGlv"
+
+    def test_pdf_upload(self):
+        """PDF file is parsed and sent to agent."""
+        async def fake_agent(text, file_count, session, language="en", **kw):
+            yield ("result", VALID_REPORT_DATA)
+
+        mock_audio = {"audio_base64": "data", "sentences": []}
+
+        with (
+            patch("routes.analyze.parse_pdf", return_value="PDF statement text"),
+            patch("routes.analyze.analyze_with_gemini_agent", side_effect=fake_agent),
+            patch("routes.analyze.generate_podcast_script", new_callable=AsyncMock, return_value="Script"),
+            patch("routes.analyze.generate_podcast_audio", new_callable=AsyncMock, return_value=mock_audio),
+        ):
+            client = TestClient(app)
+            with client.websocket_connect("/ws/analyze") as ws:
+                ws.send_text(_make_upload_msg([("bank.pdf", b"fake pdf bytes")]))
+                messages = _collect_ws_messages(ws)
+
+        types = [m["type"] for m in messages]
+        assert "report_ready" in types
+
+    def test_unsupported_file_type(self):
+        """Uploading an unsupported file type returns an error."""
+        client = TestClient(app)
+        with client.websocket_connect("/ws/analyze") as ws:
+            ws.send_text(_make_upload_msg([("data.txt", b"hello")]))
+            messages = _collect_ws_messages(ws)
+
+        error_msg = next(m for m in messages if m["type"] == "error")
+        assert "Unsupported file type" in error_msg["message"]
+
+    def test_invalid_message_type(self):
+        """Sending wrong message type returns error."""
+        client = TestClient(app)
+        with client.websocket_connect("/ws/analyze") as ws:
+            ws.send_text(json.dumps({"type": "wrong_type", "data": "bad"}))
+            messages = _collect_ws_messages(ws)
+
+        assert any(m["type"] == "error" for m in messages)
+        error_msg = next(m for m in messages if m["type"] == "error")
+        assert "Expected upload_files" in error_msg["message"]
+
+    def test_no_files(self):
+        """Sending upload_files with empty files list returns error."""
+        client = TestClient(app)
+        with client.websocket_connect("/ws/analyze") as ws:
+            ws.send_text(json.dumps({"type": "upload_files", "files": []}))
+            messages = _collect_ws_messages(ws)
+
+        assert any(m["type"] == "error" for m in messages)
+
+    def test_multiple_files(self):
+        """Multiple CSV files are combined."""
+        captured_text = []
+
+        async def fake_agent(text, file_count, session, language="en", **kw):
+            captured_text.append(text)
+            yield ("result", VALID_REPORT_DATA)
+
+        mock_audio = {"audio_base64": "data", "sentences": []}
+
+        with (
+            patch("routes.analyze.analyze_with_gemini_agent", side_effect=fake_agent),
+            patch("routes.analyze.generate_podcast_script", new_callable=AsyncMock, return_value="Script"),
+            patch("routes.analyze.generate_podcast_audio", new_callable=AsyncMock, return_value=mock_audio),
+        ):
+            client = TestClient(app)
+            with client.websocket_connect("/ws/analyze") as ws:
+                ws.send_text(_make_upload_msg([
+                    ("jan.csv", b"date,amount\n2024-01-01,50"),
+                    ("feb.csv", b"date,amount\n2024-02-01,75"),
+                ]))
+                messages = _collect_ws_messages(ws)
+
+        assert len(captured_text) == 1
+        assert "jan.csv" in captured_text[0]
+        assert "feb.csv" in captured_text[0]
+
+    def test_language_forwarded(self):
+        """Language parameter is forwarded to the agent."""
+        captured_lang = []
+
+        async def fake_agent(text, file_count, session, language="en", **kw):
+            captured_lang.append(language)
+            yield ("result", VALID_REPORT_DATA)
+
+        mock_audio = {"audio_base64": "data", "sentences": []}
+
+        with (
+            patch("routes.analyze.analyze_with_gemini_agent", side_effect=fake_agent),
+            patch("routes.analyze.generate_podcast_script", new_callable=AsyncMock, return_value="Script"),
+            patch("routes.analyze.generate_podcast_audio", new_callable=AsyncMock, return_value=mock_audio),
+        ):
+            client = TestClient(app)
+            with client.websocket_connect("/ws/analyze") as ws:
+                ws.send_text(_make_upload_msg([("test.csv", b"a,b\n1,2")], language="fr"))
+                messages = _collect_ws_messages(ws)
+
+        assert captured_lang == ["fr"]
+
+    def test_agent_error_propagated(self):
+        """Agent yielding error is sent to the client."""
+        async def fake_agent(text, file_count, session, language="en", **kw):
+            yield ("error", "Gemini API is down")
+
+        with patch("routes.analyze.analyze_with_gemini_agent", side_effect=fake_agent):
+            client = TestClient(app)
+            with client.websocket_connect("/ws/analyze") as ws:
+                ws.send_text(_make_upload_msg([("test.csv", b"a,b\n1,2")]))
+                messages = _collect_ws_messages(ws)
+
+        error_msg = next(m for m in messages if m["type"] == "error")
+        assert "Gemini API is down" in error_msg["message"]
+
+    def test_agent_no_result(self):
+        """Agent yields nothing useful → error about no report."""
+        async def fake_agent(text, file_count, session, language="en", **kw):
+            yield ("thinking", "Hmm...")
+
+        with patch("routes.analyze.analyze_with_gemini_agent", side_effect=fake_agent):
+            client = TestClient(app)
+            with client.websocket_connect("/ws/analyze") as ws:
+                ws.send_text(_make_upload_msg([("test.csv", b"a,b\n1,2")]))
+                messages = _collect_ws_messages(ws)
+
+        error_msg = next(m for m in messages if m["type"] == "error")
+        assert "failed" in error_msg["message"].lower() or "report" in error_msg["message"].lower()
+
+    def test_thinking_events_forwarded(self):
+        """Thinking events from agent are forwarded to client."""
+        async def fake_agent(text, file_count, session, language="en", **kw):
+            yield ("thinking", "Analyzing data...")
+            yield ("thinking", "Looking at categories...")
+            yield ("result", VALID_REPORT_DATA)
+
+        mock_audio = {"audio_base64": "data", "sentences": []}
+
+        with (
+            patch("routes.analyze.analyze_with_gemini_agent", side_effect=fake_agent),
+            patch("routes.analyze.generate_podcast_script", new_callable=AsyncMock, return_value="Script"),
+            patch("routes.analyze.generate_podcast_audio", new_callable=AsyncMock, return_value=mock_audio),
+        ):
+            client = TestClient(app)
+            with client.websocket_connect("/ws/analyze") as ws:
+                ws.send_text(_make_upload_msg([("test.csv", b"a,b\n1,2")]))
+                messages = _collect_ws_messages(ws)
+
+        thinking_msgs = [m for m in messages if m["type"] == "thinking"]
+        assert len(thinking_msgs) >= 2
+        assert thinking_msgs[0]["text"] == "Analyzing data..."
+
+    def test_tts_failure_fallback(self):
+        """If ElevenLabs TTS fails, podcast script is still sent without audio."""
+        async def fake_agent(text, file_count, session, language="en", **kw):
+            yield ("result", VALID_REPORT_DATA)
+
+        with (
+            patch("routes.analyze.analyze_with_gemini_agent", side_effect=fake_agent),
+            patch("routes.analyze.generate_podcast_script", new_callable=AsyncMock, return_value="Script text"),
+            patch("routes.analyze.generate_podcast_audio", new_callable=AsyncMock, side_effect=Exception("TTS failed")),
+        ):
+            client = TestClient(app)
+            with client.websocket_connect("/ws/analyze") as ws:
+                ws.send_text(_make_upload_msg([("test.csv", b"a,b\n1,2")]))
+                messages = _collect_ws_messages(ws)
+
+        audio_msg = next(m for m in messages if m["type"] == "podcast_audio_ready")
+        assert audio_msg["podcast_script"] == "Script text"
+        assert audio_msg["audio_base64"] is None
+        assert audio_msg["sentences"] == []
+
+    def test_progress_steps_in_order(self):
+        """Progress messages follow parsing → analyzing → generating → narrating order."""
+        async def fake_agent(text, file_count, session, language="en", **kw):
+            yield ("result", VALID_REPORT_DATA)
+
+        mock_audio = {"audio_base64": "data", "sentences": []}
+
+        with (
+            patch("routes.analyze.analyze_with_gemini_agent", side_effect=fake_agent),
+            patch("routes.analyze.generate_podcast_script", new_callable=AsyncMock, return_value="Script"),
+            patch("routes.analyze.generate_podcast_audio", new_callable=AsyncMock, return_value=mock_audio),
+        ):
+            client = TestClient(app)
+            with client.websocket_connect("/ws/analyze") as ws:
+                ws.send_text(_make_upload_msg([("test.csv", b"a,b\n1,2")]))
+                messages = _collect_ws_messages(ws)
+
+        progress_steps = [m["step"] for m in messages if m["type"] == "progress"]
+        assert "parsing" in progress_steps
+        assert "analyzing" in progress_steps
+        assert "generating" in progress_steps
+        assert "narrating" in progress_steps
+
+        first_parsing = progress_steps.index("parsing")
+        first_analyzing = progress_steps.index("analyzing")
+        first_generating = progress_steps.index("generating")
+        first_narrating = progress_steps.index("narrating")
+        assert first_parsing < first_analyzing < first_generating < first_narrating
+
+    def test_document_request_flow(self):
+        """Agent requests a document, client skips → agent finishes."""
+        async def fake_agent(text, file_count, session, language="en", **kw):
+            yield ("request_documents", {"document_type": "pay stub", "reason": "need income"})
+            yield ("result", VALID_REPORT_DATA)
+
+        mock_audio = {"audio_base64": "data", "sentences": []}
+
+        def on_doc_request(ws, msg):
+            ws.send_text(json.dumps({"type": "skip"}))
+
+        with (
+            patch("routes.analyze.analyze_with_gemini_agent", side_effect=fake_agent),
+            patch("routes.analyze.generate_podcast_script", new_callable=AsyncMock, return_value="Script"),
+            patch("routes.analyze.generate_podcast_audio", new_callable=AsyncMock, return_value=mock_audio),
+        ):
+            client = TestClient(app)
+            with client.websocket_connect("/ws/analyze") as ws:
+                ws.send_text(_make_upload_msg([("test.csv", b"a,b\n1,2")]))
+                messages = _collect_ws_messages(ws, respond_to={
+                    "request_documents": on_doc_request,
+                })
+
+        types = [m["type"] for m in messages]
+        assert "request_documents" in types
+        assert "report_ready" in types
+
+    def test_question_flow(self):
+        """Agent asks a question, client answers → agent finishes."""
+        async def fake_agent(text, file_count, session, language="en", **kw):
+            yield ("ask_question", {"question": "What is your goal?", "options": ["Save", "Budget"]})
+            yield ("result", VALID_REPORT_DATA)
+
+        mock_audio = {"audio_base64": "data", "sentences": []}
+
+        def on_question(ws, msg):
+            ws.send_text(json.dumps({"type": "answer_question", "answer": "Save"}))
+
+        with (
+            patch("routes.analyze.analyze_with_gemini_agent", side_effect=fake_agent),
+            patch("routes.analyze.generate_podcast_script", new_callable=AsyncMock, return_value="Script"),
+            patch("routes.analyze.generate_podcast_audio", new_callable=AsyncMock, return_value=mock_audio),
+        ):
+            client = TestClient(app)
+            with client.websocket_connect("/ws/analyze") as ws:
+                ws.send_text(_make_upload_msg([("test.csv", b"a,b\n1,2")]))
+                messages = _collect_ws_messages(ws, respond_to={
+                    "ask_question": on_question,
+                })
+
+        types = [m["type"] for m in messages]
+        assert "ask_question" in types
+        assert "report_ready" in types
+
+        q_msg = next(m for m in messages if m["type"] == "ask_question")
+        assert q_msg["question"] == "What is your goal?"
+        assert q_msg["options"] == ["Save", "Budget"]

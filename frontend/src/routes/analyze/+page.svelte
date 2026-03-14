@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import FileUpload from '$lib/components/FileUpload.svelte';
+	import SavedStatements from '$lib/components/SavedStatements.svelte';
 	import ProgressBar from '$lib/components/ProgressBar.svelte';
 	import Report from '$lib/components/Report.svelte';
 	import PodcastPlayer from '$lib/components/PodcastPlayer.svelte';
@@ -8,7 +10,7 @@
 	import QuestionCard from '$lib/components/QuestionCard.svelte';
 	import ThinkingIndicator from '$lib/components/ThinkingIndicator.svelte';
 	import { startAnalysis, type AnalysisHandle } from '$lib/api';
-	import { auth } from '$lib/stores/auth.svelte';
+	import { auth, isAuthenticated } from '$lib/stores/auth.svelte';
 	import type {
 		AppState,
 		ProgressEvent,
@@ -19,7 +21,6 @@
 	} from '$lib/types';
 
 	let appState = $state<AppState>('idle');
-	let guestMode = $state(false);
 	let progress = $state<ProgressEvent>({ step: 'parsing', message: '', percent: 0 });
 	let report = $state<FinancialReport | null>(null);
 	let podcastAudio = $state<PodcastAudio | null>(null);
@@ -28,9 +29,16 @@
 	let agentQuestion = $state<AgentQuestion | null>(null);
 	let thinkingText = $state('');
 	let analysisHandle = $state<AnalysisHandle | null>(null);
+	let savedReportId = $state<string | null>(null);
+	let selectedStatements = $state<string[]>([]);
 
 	let stillProcessing = $derived(appState === 'processing' && report !== null);
-	let showHero = $derived(!guestMode && !auth.loading && !auth.user);
+
+	onMount(() => {
+		if (!isAuthenticated()) {
+			goto('/login');
+		}
+	});
 
 	function handleUpload(files: File[], language: string) {
 		appState = 'processing';
@@ -38,10 +46,13 @@
 		errorMessage = '';
 		report = null;
 		podcastAudio = null;
+		savedReportId = null;
 
 		analysisHandle = startAnalysis({
 			files,
 			language,
+			token: auth.token,
+			savedStatementIds: selectedStatements.length > 0 ? selectedStatements : undefined,
 			onProgress: (evt) => {
 				progress = evt;
 				thinkingText = '';
@@ -51,6 +62,7 @@
 			},
 			onPodcastAudioReady: (audio) => {
 				podcastAudio = audio;
+				savedReportId = (audio as any).report_id || null;
 				appState = 'done';
 				analysisHandle = null;
 			},
@@ -63,7 +75,11 @@
 				documentRequest = req;
 				appState = 'awaiting_documents';
 				thinkingText = '';
-				progress = { step: 'analyzing', message: 'Agent needs additional information', percent: 50 };
+				progress = {
+					step: 'analyzing',
+					message: 'Agent needs additional information',
+					percent: 50
+				};
 			},
 			onAskQuestion: (q) => {
 				agentQuestion = q;
@@ -105,36 +121,28 @@
 		documentRequest = null;
 		agentQuestion = null;
 		thinkingText = '';
+		savedReportId = null;
+		selectedStatements = [];
 		progress = { step: 'parsing', message: '', percent: 0 };
 	}
 </script>
 
 <svelte:head>
-	<title>Easy MonAI - Bank Statement Analyzer</title>
+	<title>New Analysis - Easy MonAI</title>
 </svelte:head>
 
 <main>
 	<div class="content">
-		{#if showHero}
-			<div class="hero">
-				<h1>Easy MonAI</h1>
-				<p class="tagline">Your financial life, analyzed and narrated by AI</p>
-				<div class="hero-actions">
-					<button class="primary-btn" onclick={() => goto('/login')}>Log In / Sign Up</button>
-					<button class="ghost-btn" onclick={() => (guestMode = true)}>Continue as Guest</button>
-				</div>
-			</div>
-		{:else if auth.user && !guestMode && appState === 'idle'}
-			<div class="hero">
-				<h1>Easy MonAI</h1>
-				<p class="tagline">Welcome back, {auth.user.display_name}!</p>
-				<div class="hero-actions">
-					<button class="primary-btn" onclick={() => goto('/analyze')}>New Analysis</button>
-					<button class="ghost-btn" onclick={() => goto('/dashboard')}>View Dashboard</button>
-				</div>
-			</div>
-		{:else if appState === 'idle'}
+		{#if appState === 'idle'}
+			<h1>New Analysis</h1>
+			<SavedStatements bind:selected={selectedStatements} />
 			<FileUpload onupload={handleUpload} />
+			{#if selectedStatements.length > 0}
+				<p class="info">
+					{selectedStatements.length} saved statement{selectedStatements.length > 1 ? 's' : ''} will
+					be included. You can also upload additional files above.
+				</p>
+			{/if}
 		{:else if appState === 'awaiting_documents' && documentRequest}
 			<ProgressBar {progress} />
 			<DocumentRequestCard request={documentRequest} onrespond={handleDocumentResponse} />
@@ -169,7 +177,20 @@
 				</div>
 
 				{#if appState === 'done'}
-					<button class="reset-btn" onclick={reset} type="button">Analyze more statements</button>
+					<div class="done-actions">
+						{#if savedReportId}
+							<button
+								class="view-btn"
+								onclick={() => goto(`/dashboard/report/${savedReportId}`)}
+								type="button"
+							>
+								View in Dashboard
+							</button>
+						{/if}
+						<button class="reset-btn" onclick={reset} type="button">
+							Analyze more statements
+						</button>
+					</div>
 				{/if}
 			{:else if appState === 'processing'}
 				<ProgressBar {progress} />
@@ -182,82 +203,6 @@
 </main>
 
 <style>
-	.hero {
-		text-align: center;
-		padding: 4rem 1rem;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 1.5rem;
-		max-width: 600px;
-		margin: 0 auto;
-	}
-
-	.hero h1 {
-		font-size: 3.5rem;
-		font-weight: 800;
-		margin: 0;
-		background: linear-gradient(to right, var(--color-primary), #b366ff);
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
-	}
-
-	.tagline {
-		font-size: 1.25rem;
-		color: var(--color-text-muted);
-		margin: 0;
-	}
-
-	.hero-actions {
-		display: flex;
-		gap: 1rem;
-		margin-top: 1rem;
-	}
-
-	@media (max-width: 600px) {
-		.hero-actions {
-			flex-direction: column;
-			width: 100%;
-		}
-
-		.hero-actions > button {
-			width: 100%;
-		}
-	}
-
-	.primary-btn {
-		padding: 0.875rem 1.5rem;
-		background: var(--color-primary);
-		color: white;
-		border: none;
-		border-radius: var(--radius-sm);
-		font-size: 1rem;
-		font-weight: 600;
-		cursor: pointer;
-		transition: opacity 0.2s;
-	}
-
-	.primary-btn:hover {
-		opacity: 0.9;
-	}
-
-	.ghost-btn {
-		padding: 0.875rem 1.5rem;
-		background: transparent;
-		color: var(--color-text);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
-		font-size: 1rem;
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.ghost-btn:hover {
-		background: var(--color-surface-2);
-		border-color: var(--color-text-muted);
-	}
-
 	main {
 		min-height: 100vh;
 		display: flex;
@@ -270,8 +215,20 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 2.5rem;
+		gap: 2rem;
 		width: 100%;
+	}
+
+	h1 {
+		font-size: 1.5rem;
+		font-weight: 700;
+		margin: 0;
+	}
+
+	.info {
+		font-size: 0.85rem;
+		color: var(--color-primary);
+		margin: 0;
 	}
 
 	.error-card {
@@ -303,6 +260,28 @@
 	.error-message {
 		color: var(--color-text-muted);
 		font-size: 0.95rem;
+	}
+
+	.done-actions {
+		display: flex;
+		gap: 0.75rem;
+		align-items: center;
+	}
+
+	.view-btn {
+		padding: 0.75rem 1.5rem;
+		background: var(--color-primary);
+		color: white;
+		border: none;
+		border-radius: var(--radius-sm);
+		font-size: 0.9rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: opacity 0.2s;
+	}
+
+	.view-btn:hover {
+		opacity: 0.9;
 	}
 
 	.reset-btn {

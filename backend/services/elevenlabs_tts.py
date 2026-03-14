@@ -1,22 +1,19 @@
 import asyncio
-import os
 import re
 
-from dotenv import load_dotenv
 from elevenlabs.client import ElevenLabs
 
-load_dotenv()
+from config import ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, ELEVENLABS_MODEL_ID, ELEVENLABS_OUTPUT_FORMAT
 
-VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"  # George
-MODEL_ID = "eleven_flash_v2_5"
-OUTPUT_FORMAT = "mp3_44100_128"
+VOICE_ID = ELEVENLABS_VOICE_ID
+MODEL_ID = ELEVENLABS_MODEL_ID
+OUTPUT_FORMAT = ELEVENLABS_OUTPUT_FORMAT
 
 
 def _get_client() -> ElevenLabs:
-    api_key = os.getenv("ELEVENLABS_API_KEY")
-    if not api_key:
+    if not ELEVENLABS_API_KEY:
         raise RuntimeError("ELEVENLABS_API_KEY not set in environment")
-    return ElevenLabs(api_key=api_key)
+    return ElevenLabs(api_key=ELEVENLABS_API_KEY)
 
 
 def _split_sentences(text: str) -> list[str]:

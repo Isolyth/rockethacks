@@ -4,11 +4,13 @@
 	let {
 		podcastScript,
 		audioBase64,
-		sentences
+		sentences,
+		audioUrl: externalAudioUrl = null
 	}: {
 		podcastScript: string;
 		audioBase64: string | null;
 		sentences: PodcastSentence[];
+		audioUrl?: string | null;
 	} = $props();
 
 	let audioEl = $state<HTMLAudioElement | null>(null);
@@ -18,16 +20,29 @@
 	let currentTime = $state(0);
 	let duration = $state(0);
 
-	let hasAudio = $derived(!!audioBase64 && sentences.length > 0);
+	let hasAudio = $derived(
+		(!!audioBase64 && sentences.length > 0) || !!externalAudioUrl
+	);
 
-	// Build audio blob URL from base64 (more efficient than data: URL)
-	let audioUrl = $derived.by(() => {
-		if (!audioBase64) return '';
+	// Build audio blob URL from base64, or use external URL
+	let resolvedAudioUrl = $state('');
+
+	$effect(() => {
+		if (externalAudioUrl) {
+			resolvedAudioUrl = externalAudioUrl;
+			return;
+		}
+		if (!audioBase64) {
+			resolvedAudioUrl = '';
+			return;
+		}
 		const binary = atob(audioBase64);
 		const bytes = new Uint8Array(binary.length);
 		for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 		const blob = new Blob([bytes], { type: 'audio/mpeg' });
-		return URL.createObjectURL(blob);
+		const url = URL.createObjectURL(blob);
+		resolvedAudioUrl = url;
+		return () => URL.revokeObjectURL(url);
 	});
 
 	function onTimeUpdate() {
@@ -96,7 +111,7 @@
 						onclick={() => clickSentence(i)}
 						role="button"
 						tabindex="0"
-						onkeydown={(e) => e.key === 'Enter' && clickSentence(i)}
+						onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), clickSentence(i))}
 					>
 						{sentence.text}{' '}
 					</span>
@@ -116,7 +131,7 @@
 		<div class="player">
 			<audio
 				bind:this={audioEl}
-				src={audioUrl}
+				src={resolvedAudioUrl}
 				ontimeupdate={onTimeUpdate}
 				onplay={() => (isPlaying = true)}
 				onpause={() => (isPlaying = false)}

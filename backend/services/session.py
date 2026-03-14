@@ -7,6 +7,7 @@ class Session:
     language: str = "en"
     user_response: dict | None = None
     active: bool = True
+    user_id: str | None = None
 
 
 sessions: dict[str, Session] = {}
