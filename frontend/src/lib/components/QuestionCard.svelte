@@ -3,10 +3,14 @@
 
 	let {
 		question,
-		onAnswer
+		onAnswer,
+		mode = 'question',
+		loading = false
 	}: {
-		question: AgentQuestion;
+		question?: AgentQuestion;
 		onAnswer: (answer: string) => void;
+		mode?: 'question' | 'followup';
+		loading?: boolean;
 	} = $props();
 
 	let selected = $state<string | null>(null);
@@ -16,13 +20,19 @@
 
 <div class="question-card">
 	<div class="question-header">
-		<div class="question-icon">?</div>
-		<h3 class="question-title">The agent has a question</h3>
+		{#if mode === 'followup'}
+			<div class="question-icon followup">✨</div>
+			<h3 class="question-title">Follow-up Analysis</h3>
+		{:else}
+			<div class="question-icon">?</div>
+			<h3 class="question-title">The agent has a question</h3>
+		{/if}
 	</div>
 
-	<p class="question-text">{question.question}</p>
+	{#if mode === 'question' && question}
+		<p class="question-text">{question.question}</p>
 
-	<div class="options">
+		<div class="options">
 		{#each question.options as option}
 			<label class="option" class:selected={!useCustom && selected === option}>
 				<input
@@ -49,6 +59,7 @@
 					useCustom = true;
 					selected = null;
 				}}
+				disabled={loading}
 			/>
 			<span class="option-text">Other</span>
 		</label>
@@ -60,23 +71,48 @@
 			class="custom-input"
 			placeholder="Type your answer..."
 			bind:value={customText}
+			disabled={loading}
 			onkeydown={(e) => {
-				if (e.key === 'Enter' && customText.trim()) onAnswer(customText.trim());
+				if (e.key === 'Enter' && customText.trim() && !loading) onAnswer(customText.trim());
 			}}
 		/>
+	{/if}
+	{:else}
+		<p class="question-text">Ask a "what-if" question to see how it affects your projection.</p>
+		<textarea
+			class="custom-input followup-textarea"
+			placeholder="e.g., What if I cut out my Starbucks spending totally and doubled my savings?"
+			bind:value={customText}
+			disabled={loading}
+			onkeydown={(e) => {
+				if (e.key === 'Enter' && !e.shiftKey && customText.trim() && !loading) {
+					e.preventDefault();
+					onAnswer(customText.trim());
+				}
+			}}
+		></textarea>
 	{/if}
 
 	<div class="actions">
 		<button
 			class="submit-btn"
-			disabled={useCustom ? !customText.trim() : !selected}
+			disabled={loading || (mode === 'question' ? (useCustom ? !customText.trim() : !selected) : !customText.trim())}
 			onclick={() => {
-				const answer = useCustom ? customText.trim() : selected;
-				if (answer) onAnswer(answer);
+				const answer = mode === 'question' ? (useCustom ? customText.trim() : selected) : customText.trim();
+				if (answer && !loading) {
+					onAnswer(answer);
+					if (mode === 'followup') {
+						customText = '';
+					}
+				}
 			}}
 			type="button"
 		>
-			Submit answer
+			{#if loading}
+				Thinking...
+			{:else}
+				{mode === 'question' ? 'Submit answer' : 'Analyze'}
+			{/if}
 		</button>
 	</div>
 </div>
@@ -112,6 +148,10 @@
 		font-size: 1.25rem;
 		font-weight: 700;
 		flex-shrink: 0;
+	}
+
+	.question-icon.followup {
+		background: var(--color-success, #10b981);
 	}
 
 	.question-title {
@@ -184,6 +224,17 @@
 
 	.custom-input::placeholder {
 		color: var(--color-text-muted);
+	}
+
+	.custom-input:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.followup-textarea {
+		min-height: 80px;
+		resize: vertical;
+		font-family: inherit;
 	}
 
 	.actions {

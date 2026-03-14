@@ -65,6 +65,23 @@ class DocumentRequest(BaseModel):
     reason: str
 
 
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class FollowUpRequest(BaseModel):
+    report_data: dict
+    prompt: str
+    history: list[ChatMessage] = []
+    language: str = "en"
+
+
+class FollowUpResponse(BaseModel):
+    message: str
+    podcast_script: str | None = None
+
+
 # --- Auth & Dashboard models ---
 
 class SignupRequest(BaseModel):

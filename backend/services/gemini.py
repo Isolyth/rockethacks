@@ -120,6 +120,37 @@ Financial analysis:
 $report_json
 """
 
+FOLLOWUP_AGENT_PROMPT = """\
+You are a friendly, helpful financial advisor agent. You previously generated a financial report based on the user's bank statements.
+The user is now asking follow-up questions or proposing "what-if" scenarios.
+
+Answer the user's question directly, clearly, and concisely based on their original financial figures.
+If they ask a "what-if" question, project the new numbers (e.g., how much they would save) and provide a helpful insight.
+
+$language_instruction
+
+Original Financial Report Context:
+$report_json
+"""
+
+FOLLOWUP_PODCAST_PROMPT = """\
+You are a friendly, engaging financial podcast host. You previously recorded a script for this user.
+The user just asked a follow-up question, and we gave them a response.
+
+User prompt: "$prompt"
+Our response: "$ai_response"
+
+Write a SHORT, 30-second audio update to the podcast.
+1. Acknowledge their question directly ("You asked what would happen if...")
+2. Give the bottom line of our response.
+3. Keep it brief and encouraging.
+
+$language_instruction
+
+IMPORTANT: Your output will be fed directly into a text-to-speech engine and read aloud as-is. Write ONLY the spoken words. Do NOT include formatting, stage directions, or speaker labels.
+"""
+
+
 # Tool declarations for the agentic loop
 #
 # NOTE: google_search (GoogleSearch tool) cannot be passed alongside
@@ -615,5 +646,79 @@ async def generate_podcast_script(report: dict, language: str = "en") -> str:
         client.models.generate_content,
         model=MODEL,
         contents=prompt,
+    )
+    return response.text
+
+
+async def generate_followup_chat(report_data: dict, prompt: str, history: list, language: str = "en") -> str:
+    from string import Template
+    import json
+
+    lang_instruction = _language_instruction(language)
+    system_prompt = Template(FOLLOWUP_AGENT_PROMPT).safe_substitute(
+        report_json=json.dumps(report_data, indent=2),
+        language_instruction=lang_instruction,
+    )
+
+    # Build the history
+    # Gemini models.generate_content takes `contents` which is a list of types.Content
+    contents = []
+    contents.append(
+        types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=system_prompt)]
+        )
+    )
+    contents.append(
+        types.Content(
+            role="model",
+            parts=[types.Part.from_text(text="Understood. I'm ready to help.")]
+        )
+    )
+    
+    for msg in history:
+        # History messages are parsed as ChatMessage pydantic models
+        role = "user" if getattr(msg, 'role', 'user') == 'user' else "model"
+        content = getattr(msg, 'content', '')
+        contents.append(
+            types.Content(
+                role=role,
+                parts=[types.Part.from_text(text=content)]
+            )
+        )
+
+    # Add the current prompt
+    contents.append(
+        types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=prompt)]
+        )
+    )
+
+    response = await asyncio.to_thread(
+        client.models.generate_content,
+        model=MODEL,
+        contents=contents,
+    )
+
+    return response.text
+
+
+async def generate_followup_podcast_script(ai_response: str, prompt: str, language: str = "en") -> str:
+    from string import Template
+
+    lang_name = LANGUAGE_NAMES.get(language, language)
+    lang_instruction = "" if language == "en" else f"IMPORTANT: Write the ENTIRE script in {lang_name}. The listener speaks {lang_name}."
+
+    sys_prompt = Template(FOLLOWUP_PODCAST_PROMPT).safe_substitute(
+        prompt=prompt,
+        ai_response=ai_response,
+        language_instruction=lang_instruction,
+    )
+
+    response = await asyncio.to_thread(
+        client.models.generate_content,
+        model=MODEL,
+        contents=sys_prompt,
     )
     return response.text

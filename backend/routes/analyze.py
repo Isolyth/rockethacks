@@ -6,7 +6,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 
 from config import (
     MAX_FILE_SIZE_BYTES,
@@ -23,8 +23,8 @@ from services.auth import get_user_from_token
 from services.dynamo import save_report, save_statement, get_statement
 from services.encryption import encrypt_bytes, decrypt_bytes
 from services.storage import upload_statement, upload_audio, get_statement_bytes
-from services.rate_limit import track_ws_connection, release_ws_connection
-from models.schemas import FinancialReport
+from services.rate_limit import track_ws_connection, release_ws_connection, RateLimiter
+from models.schemas import FinancialReport, FollowUpRequest, FollowUpResponse
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -474,3 +474,48 @@ async def ws_analyze(ws: WebSocket):
         session.active = False
         sessions.pop(session_id, None)
         release_ws_connection(client_ip)
+
+
+_followup_limiter = RateLimiter(max_requests=20, window_seconds=60)
+
+
+@router.post("/analyze/follow-up", response_model=FollowUpResponse)
+async def analyze_followup(request: FollowUpRequest, raw_request: Request):
+    """Generate a conversational follow-up response based on user prompt and history."""
+    from services.gemini import generate_followup_chat, generate_followup_podcast_script
+
+    # Rate limit by IP
+    client_ip = raw_request.client.host if raw_request.client else "unknown"
+    if not _followup_limiter.is_allowed(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+
+    try:
+        t0 = time.time()
+        logger.info(f"=== POST /analyze/follow-up lang={request.language} ===")
+
+        ai_message = await generate_followup_chat(
+            report_data=request.report_data,
+            prompt=request.prompt,
+            history=request.history,
+            language=request.language
+        )
+        logger.info(f"  [1/2] Follow-up chat done ({time.time() - t0:.1f}s)")
+
+        t1 = time.time()
+        podcast_script_update = await generate_followup_podcast_script(
+            ai_response=ai_message,
+            prompt=request.prompt,
+            language=request.language
+        )
+        logger.info(f"  [2/2] Follow-up script done ({time.time() - t1:.1f}s)")
+
+        return FollowUpResponse(
+            message=ai_message,
+            podcast_script=podcast_script_update,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error during follow-up chat: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
