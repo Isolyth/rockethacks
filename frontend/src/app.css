@@ -1,7 +1,7 @@
 :root {
 	--color-bg: #0a0a0f;
-	--color-surface: #141420;
-	--color-surface-2: #1c1c2e;
+	--color-surface: rgba(20, 20, 32, 0.6);
+	--color-surface-2: rgba(28, 28, 46, 0.6);
 	--color-primary: #6366f1;
 	--color-primary-light: #818cf8;
 	--color-text: #e2e8f0;
@@ -33,6 +33,19 @@ body {
 	color: var(--color-text);
 	line-height: 1.6;
 	min-height: 100vh;
+	position: relative;
+}
+
+body::before {
+	content: '';
+	position: fixed;
+	top: -50%;
+	left: -50%;
+	width: 200%;
+	height: 200%;
+	background: radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.1) 0%, transparent 50%);
+	pointer-events: none;
+	z-index: -1;
 }
 
 h1,
