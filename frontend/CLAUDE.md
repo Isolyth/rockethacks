@@ -25,7 +25,7 @@ npm run check        # svelte-check + TypeScript
 - `src/lib/types.ts` - TypeScript interfaces matching backend Pydantic models
 - `src/lib/components/` - All UI components:
   - `FileUpload.svelte` - Drag-drop upload with language selector
-  - `Report.svelte` - Financial report display (categories, merchants, insights)
+  - `Report.svelte` - Financial report display (categories, merchants, insights, search sources)
   - `PodcastPlayer.svelte` - Audio player with sentence-level highlight sync
   - `PodcastScript.svelte` - Script-only fallback (no audio)
   - `ProgressBar.svelte` - Multi-step progress (parsing/analyzing/generating/narrating)
