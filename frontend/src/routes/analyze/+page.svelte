@@ -31,14 +31,36 @@
 	let analysisHandle = $state<AnalysisHandle | null>(null);
 	let savedReportId = $state<string | null>(null);
 	let selectedStatements = $state<string[]>([]);
+	let selectedLanguage = $state('en');
 
 	let stillProcessing = $derived(appState === 'processing' && report !== null);
+
+	const languages = [
+		{ code: 'en', name: 'English' },
+		{ code: 'es', name: 'Spanish' },
+		{ code: 'fr', name: 'French' },
+		{ code: 'de', name: 'German' },
+		{ code: 'pt', name: 'Portuguese' },
+		{ code: 'it', name: 'Italian' },
+		{ code: 'ja', name: 'Japanese' },
+		{ code: 'ko', name: 'Korean' },
+		{ code: 'zh', name: 'Chinese' },
+		{ code: 'hi', name: 'Hindi' },
+		{ code: 'ar', name: 'Arabic' },
+		{ code: 'nl', name: 'Dutch' },
+		{ code: 'pl', name: 'Polish' },
+		{ code: 'ru', name: 'Russian' }
+	];
 
 	onMount(() => {
 		if (!isAuthenticated()) {
 			goto('/login');
 		}
 	});
+
+	function startWithSavedOnly() {
+		handleUpload([], selectedLanguage);
+	}
 
 	function handleUpload(files: File[], language: string) {
 		appState = 'processing';
@@ -136,13 +158,25 @@
 		{#if appState === 'idle'}
 			<h1>New Analysis</h1>
 			<SavedStatements bind:selected={selectedStatements} />
-			<FileUpload onupload={handleUpload} />
+
 			{#if selectedStatements.length > 0}
-				<p class="info">
-					{selectedStatements.length} saved statement{selectedStatements.length > 1 ? 's' : ''} will
-					be included. You can also upload additional files above.
-				</p>
+				<div class="saved-actions">
+					<div class="language-row">
+						<label class="language-label" for="lang-select">Report & podcast language</label>
+						<select id="lang-select" class="language-select" bind:value={selectedLanguage}>
+							{#each languages as lang}
+								<option value={lang.code}>{lang.name}</option>
+							{/each}
+						</select>
+					</div>
+					<button class="primary-btn" onclick={startWithSavedOnly} type="button">
+						Analyze {selectedStatements.length} saved statement{selectedStatements.length > 1 ? 's' : ''}
+					</button>
+					<p class="divider-text">or upload additional files below</p>
+				</div>
 			{/if}
+
+			<FileUpload onupload={handleUpload} />
 		{:else if appState === 'awaiting_documents' && documentRequest}
 			<ProgressBar {progress} />
 			<DocumentRequestCard request={documentRequest} onrespond={handleDocumentResponse} />
@@ -225,9 +259,67 @@
 		margin: 0;
 	}
 
-	.info {
+	.saved-actions {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1rem;
+		width: 100%;
+		max-width: 560px;
+	}
+
+	.language-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		width: 100%;
+		padding: 0.75rem 1rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+	}
+
+	.language-label {
+		font-size: 0.9rem;
+		color: var(--color-text-muted);
+	}
+
+	.language-select {
+		padding: 0.5rem 0.75rem;
+		background: var(--color-surface-2);
+		color: var(--color-text);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.9rem;
+		min-width: 140px;
+	}
+
+	.language-select:focus {
+		outline: none;
+		border-color: var(--color-primary);
+	}
+
+	.primary-btn {
+		padding: 0.875rem 2rem;
+		background: var(--color-primary);
+		color: white;
+		border: none;
+		border-radius: var(--radius-sm);
+		font-size: 1rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: opacity 0.2s;
+		width: 100%;
+	}
+
+	.primary-btn:hover {
+		opacity: 0.9;
+	}
+
+	.divider-text {
 		font-size: 0.85rem;
-		color: var(--color-primary);
+		color: var(--color-text-muted);
 		margin: 0;
 	}
 
