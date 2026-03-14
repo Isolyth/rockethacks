@@ -5,7 +5,8 @@ import json
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 
-from fastapi.testclient import TestClient
+from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from main import app
 from routes.analyze import parse_file_data, send_json
@@ -21,11 +22,6 @@ class TestParseFileData:
         assert "date,amount" in result
 
     def test_pdf_file(self):
-        fake_page = MagicMock()
-        fake_page.extract_text.return_value = "PDF content"
-        fake_reader = MagicMock()
-        fake_reader.pages = [fake_page]
-
         with patch("routes.analyze.parse_pdf") as mock_parse:
             mock_parse.return_value = "PDF content"
             result = parse_file_data("statement.pdf", b"fake pdf")
@@ -78,19 +74,45 @@ class TestSendJson:
         assert sent["report"]["summary"]["total_income"] == 5000
 
 
+# ── Helper for WebSocket tests ──────────────────────────────────────────────
+
+def _make_upload_msg(files, language="en"):
+    """Build an upload_files WebSocket message."""
+    file_list = []
+    for name, content in files:
+        file_list.append({
+            "name": name,
+            "content": base64.b64encode(content).decode(),
+        })
+    return json.dumps({"type": "upload_files", "files": file_list, "language": language})
+
+
+def _collect_ws_messages(ws, respond_to=None):
+    """Read all messages from a WebSocket until terminal event or disconnect.
+
+    respond_to: dict mapping message type to a callback(ws, msg) that sends a reply.
+    """
+    messages = []
+    respond_to = respond_to or {}
+    try:
+        for _ in range(100):  # safety limit
+            raw = ws.receive_text()
+            data = json.loads(raw)
+            messages.append(data)
+            # Handle interactive responses
+            if data["type"] in respond_to:
+                respond_to[data["type"]](ws, data)
+            # Terminal events
+            if data["type"] in ("podcast_audio_ready", "error"):
+                break
+    except (WebSocketDisconnect, Exception):
+        pass
+    return messages
+
+
 # ── WebSocket /ws/analyze ────────────────────────────────────────────────────
 
 class TestWsAnalyze:
-    def _make_upload_msg(self, files, language="en"):
-        """Build an upload_files WebSocket message."""
-        file_list = []
-        for name, content in files:
-            file_list.append({
-                "name": name,
-                "content": base64.b64encode(content).decode(),
-            })
-        return json.dumps({"type": "upload_files", "files": file_list, "language": language})
-
     def test_csv_full_pipeline(self):
         """Happy path: CSV upload → progress → report → podcast."""
         mock_audio = {
@@ -108,28 +130,17 @@ class TestWsAnalyze:
         ):
             client = TestClient(app)
             with client.websocket_connect("/ws/analyze") as ws:
-                ws.send_text(self._make_upload_msg([("test.csv", b"date,amount\n2024-01-01,50")]))
-
-                messages = []
-                while True:
-                    try:
-                        data = json.loads(ws.receive_text(timeout=2))
-                        messages.append(data)
-                        if data["type"] in ("podcast_audio_ready", "error"):
-                            break
-                    except Exception:
-                        break
+                ws.send_text(_make_upload_msg([("test.csv", b"date,amount\n2024-01-01,50")]))
+                messages = _collect_ws_messages(ws)
 
         types = [m["type"] for m in messages]
         assert "progress" in types
         assert "report_ready" in types
         assert "podcast_audio_ready" in types
 
-        # Verify report content
         report_msg = next(m for m in messages if m["type"] == "report_ready")
         assert report_msg["report"]["summary"]["total_income"] == 5000.0
 
-        # Verify audio content
         audio_msg = next(m for m in messages if m["type"] == "podcast_audio_ready")
         assert audio_msg["podcast_script"] == MOCK_PODCAST_SCRIPT
         assert audio_msg["audio_base64"] == "bW9ja2F1ZGlv"
@@ -149,17 +160,8 @@ class TestWsAnalyze:
         ):
             client = TestClient(app)
             with client.websocket_connect("/ws/analyze") as ws:
-                ws.send_text(self._make_upload_msg([("bank.pdf", b"fake pdf bytes")]))
-
-                messages = []
-                while True:
-                    try:
-                        data = json.loads(ws.receive_text(timeout=2))
-                        messages.append(data)
-                        if data["type"] in ("podcast_audio_ready", "error"):
-                            break
-                    except Exception:
-                        break
+                ws.send_text(_make_upload_msg([("bank.pdf", b"fake pdf bytes")]))
+                messages = _collect_ws_messages(ws)
 
         types = [m["type"] for m in messages]
         assert "report_ready" in types
@@ -168,14 +170,8 @@ class TestWsAnalyze:
         """Uploading an unsupported file type returns an error."""
         client = TestClient(app)
         with client.websocket_connect("/ws/analyze") as ws:
-            ws.send_text(self._make_upload_msg([("data.txt", b"hello")]))
-
-            data = json.loads(ws.receive_text(timeout=2))
-            # First message might be progress, keep reading until error
-            messages = [data]
-            while data["type"] != "error":
-                data = json.loads(ws.receive_text(timeout=2))
-                messages.append(data)
+            ws.send_text(_make_upload_msg([("data.txt", b"hello")]))
+            messages = _collect_ws_messages(ws)
 
         error_msg = next(m for m in messages if m["type"] == "error")
         assert "Unsupported file type" in error_msg["message"]
@@ -185,17 +181,20 @@ class TestWsAnalyze:
         client = TestClient(app)
         with client.websocket_connect("/ws/analyze") as ws:
             ws.send_text(json.dumps({"type": "wrong_type", "data": "bad"}))
-            data = json.loads(ws.receive_text(timeout=2))
-            assert data["type"] == "error"
-            assert "Expected upload_files" in data["message"]
+            messages = _collect_ws_messages(ws)
+
+        assert any(m["type"] == "error" for m in messages)
+        error_msg = next(m for m in messages if m["type"] == "error")
+        assert "Expected upload_files" in error_msg["message"]
 
     def test_no_files(self):
         """Sending upload_files with empty files list returns error."""
         client = TestClient(app)
         with client.websocket_connect("/ws/analyze") as ws:
             ws.send_text(json.dumps({"type": "upload_files", "files": []}))
-            data = json.loads(ws.receive_text(timeout=2))
-            assert data["type"] == "error"
+            messages = _collect_ws_messages(ws)
+
+        assert any(m["type"] == "error" for m in messages)
 
     def test_multiple_files(self):
         """Multiple CSV files are combined."""
@@ -214,20 +213,11 @@ class TestWsAnalyze:
         ):
             client = TestClient(app)
             with client.websocket_connect("/ws/analyze") as ws:
-                ws.send_text(self._make_upload_msg([
+                ws.send_text(_make_upload_msg([
                     ("jan.csv", b"date,amount\n2024-01-01,50"),
                     ("feb.csv", b"date,amount\n2024-02-01,75"),
                 ]))
-
-                messages = []
-                while True:
-                    try:
-                        data = json.loads(ws.receive_text(timeout=2))
-                        messages.append(data)
-                        if data["type"] in ("podcast_audio_ready", "error"):
-                            break
-                    except Exception:
-                        break
+                messages = _collect_ws_messages(ws)
 
         assert len(captured_text) == 1
         assert "jan.csv" in captured_text[0]
@@ -250,17 +240,8 @@ class TestWsAnalyze:
         ):
             client = TestClient(app)
             with client.websocket_connect("/ws/analyze") as ws:
-                ws.send_text(self._make_upload_msg([("test.csv", b"a,b\n1,2")], language="fr"))
-
-                messages = []
-                while True:
-                    try:
-                        data = json.loads(ws.receive_text(timeout=2))
-                        messages.append(data)
-                        if data["type"] in ("podcast_audio_ready", "error"):
-                            break
-                    except Exception:
-                        break
+                ws.send_text(_make_upload_msg([("test.csv", b"a,b\n1,2")], language="fr"))
+                messages = _collect_ws_messages(ws)
 
         assert captured_lang == ["fr"]
 
@@ -272,17 +253,8 @@ class TestWsAnalyze:
         with patch("routes.analyze.analyze_with_gemini_agent", side_effect=fake_agent):
             client = TestClient(app)
             with client.websocket_connect("/ws/analyze") as ws:
-                ws.send_text(self._make_upload_msg([("test.csv", b"a,b\n1,2")]))
-
-                messages = []
-                while True:
-                    try:
-                        data = json.loads(ws.receive_text(timeout=2))
-                        messages.append(data)
-                        if data["type"] == "error":
-                            break
-                    except Exception:
-                        break
+                ws.send_text(_make_upload_msg([("test.csv", b"a,b\n1,2")]))
+                messages = _collect_ws_messages(ws)
 
         error_msg = next(m for m in messages if m["type"] == "error")
         assert "Gemini API is down" in error_msg["message"]
@@ -291,23 +263,12 @@ class TestWsAnalyze:
         """Agent yields nothing useful → error about no report."""
         async def fake_agent(text, file_count, session, language="en", **kw):
             yield ("thinking", "Hmm...")
-            # No result or error yielded
-            return
 
         with patch("routes.analyze.analyze_with_gemini_agent", side_effect=fake_agent):
             client = TestClient(app)
             with client.websocket_connect("/ws/analyze") as ws:
-                ws.send_text(self._make_upload_msg([("test.csv", b"a,b\n1,2")]))
-
-                messages = []
-                while True:
-                    try:
-                        data = json.loads(ws.receive_text(timeout=2))
-                        messages.append(data)
-                        if data["type"] == "error":
-                            break
-                    except Exception:
-                        break
+                ws.send_text(_make_upload_msg([("test.csv", b"a,b\n1,2")]))
+                messages = _collect_ws_messages(ws)
 
         error_msg = next(m for m in messages if m["type"] == "error")
         assert "failed" in error_msg["message"].lower() or "report" in error_msg["message"].lower()
@@ -328,17 +289,8 @@ class TestWsAnalyze:
         ):
             client = TestClient(app)
             with client.websocket_connect("/ws/analyze") as ws:
-                ws.send_text(self._make_upload_msg([("test.csv", b"a,b\n1,2")]))
-
-                messages = []
-                while True:
-                    try:
-                        data = json.loads(ws.receive_text(timeout=2))
-                        messages.append(data)
-                        if data["type"] in ("podcast_audio_ready", "error"):
-                            break
-                    except Exception:
-                        break
+                ws.send_text(_make_upload_msg([("test.csv", b"a,b\n1,2")]))
+                messages = _collect_ws_messages(ws)
 
         thinking_msgs = [m for m in messages if m["type"] == "thinking"]
         assert len(thinking_msgs) >= 2
@@ -356,17 +308,8 @@ class TestWsAnalyze:
         ):
             client = TestClient(app)
             with client.websocket_connect("/ws/analyze") as ws:
-                ws.send_text(self._make_upload_msg([("test.csv", b"a,b\n1,2")]))
-
-                messages = []
-                while True:
-                    try:
-                        data = json.loads(ws.receive_text(timeout=2))
-                        messages.append(data)
-                        if data["type"] in ("podcast_audio_ready", "error"):
-                            break
-                    except Exception:
-                        break
+                ws.send_text(_make_upload_msg([("test.csv", b"a,b\n1,2")]))
+                messages = _collect_ws_messages(ws)
 
         audio_msg = next(m for m in messages if m["type"] == "podcast_audio_ready")
         assert audio_msg["podcast_script"] == "Script text"
@@ -387,26 +330,15 @@ class TestWsAnalyze:
         ):
             client = TestClient(app)
             with client.websocket_connect("/ws/analyze") as ws:
-                ws.send_text(self._make_upload_msg([("test.csv", b"a,b\n1,2")]))
-
-                messages = []
-                while True:
-                    try:
-                        data = json.loads(ws.receive_text(timeout=2))
-                        messages.append(data)
-                        if data["type"] in ("podcast_audio_ready", "error"):
-                            break
-                    except Exception:
-                        break
+                ws.send_text(_make_upload_msg([("test.csv", b"a,b\n1,2")]))
+                messages = _collect_ws_messages(ws)
 
         progress_steps = [m["step"] for m in messages if m["type"] == "progress"]
-        # Verify expected steps appear
         assert "parsing" in progress_steps
         assert "analyzing" in progress_steps
         assert "generating" in progress_steps
         assert "narrating" in progress_steps
 
-        # Verify order
         first_parsing = progress_steps.index("parsing")
         first_analyzing = progress_steps.index("analyzing")
         first_generating = progress_steps.index("generating")
@@ -415,15 +347,14 @@ class TestWsAnalyze:
 
     def test_document_request_flow(self):
         """Agent requests a document, client skips → agent finishes."""
-        call_count = 0
-
         async def fake_agent(text, file_count, session, language="en", **kw):
-            nonlocal call_count
             yield ("request_documents", {"document_type": "pay stub", "reason": "need income"})
-            # After yield, session.user_response should be set by the route handler
             yield ("result", VALID_REPORT_DATA)
 
         mock_audio = {"audio_base64": "data", "sentences": []}
+
+        def on_doc_request(ws, msg):
+            ws.send_text(json.dumps({"type": "skip"}))
 
         with (
             patch("routes.analyze.analyze_with_gemini_agent", side_effect=fake_agent),
@@ -432,20 +363,10 @@ class TestWsAnalyze:
         ):
             client = TestClient(app)
             with client.websocket_connect("/ws/analyze") as ws:
-                ws.send_text(self._make_upload_msg([("test.csv", b"a,b\n1,2")]))
-
-                messages = []
-                while True:
-                    try:
-                        data = json.loads(ws.receive_text(timeout=2))
-                        messages.append(data)
-                        if data["type"] == "request_documents":
-                            # Client skips
-                            ws.send_text(json.dumps({"type": "skip"}))
-                        if data["type"] in ("podcast_audio_ready", "error"):
-                            break
-                    except Exception:
-                        break
+                ws.send_text(_make_upload_msg([("test.csv", b"a,b\n1,2")]))
+                messages = _collect_ws_messages(ws, respond_to={
+                    "request_documents": on_doc_request,
+                })
 
         types = [m["type"] for m in messages]
         assert "request_documents" in types
@@ -459,6 +380,9 @@ class TestWsAnalyze:
 
         mock_audio = {"audio_base64": "data", "sentences": []}
 
+        def on_question(ws, msg):
+            ws.send_text(json.dumps({"type": "answer_question", "answer": "Save"}))
+
         with (
             patch("routes.analyze.analyze_with_gemini_agent", side_effect=fake_agent),
             patch("routes.analyze.generate_podcast_script", new_callable=AsyncMock, return_value="Script"),
@@ -466,19 +390,10 @@ class TestWsAnalyze:
         ):
             client = TestClient(app)
             with client.websocket_connect("/ws/analyze") as ws:
-                ws.send_text(self._make_upload_msg([("test.csv", b"a,b\n1,2")]))
-
-                messages = []
-                while True:
-                    try:
-                        data = json.loads(ws.receive_text(timeout=2))
-                        messages.append(data)
-                        if data["type"] == "ask_question":
-                            ws.send_text(json.dumps({"type": "answer_question", "answer": "Save"}))
-                        if data["type"] in ("podcast_audio_ready", "error"):
-                            break
-                    except Exception:
-                        break
+                ws.send_text(_make_upload_msg([("test.csv", b"a,b\n1,2")]))
+                messages = _collect_ws_messages(ws, respond_to={
+                    "ask_question": on_question,
+                })
 
         types = [m["type"] for m in messages]
         assert "ask_question" in types
