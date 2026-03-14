@@ -66,7 +66,7 @@ async def analyze_statements(files: list[UploadFile] = File(...)):
             }
 
             t1 = time.time()
-            report_data = await analyze_with_gemini(all_text)
+            report_data = await analyze_with_gemini(all_text, file_count=len(files))
             logger.info(f"[2/4] Gemini analysis done ({time.time() - t1:.1f}s)")
 
             report = FinancialReport(**report_data)

@@ -11,6 +11,10 @@ client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 MODEL = "gemini-flash-latest"
 
+MULTI_DOC_REMINDER = """
+IMPORTANT: You are receiving $file_count separate bank statement documents. They are separated by "--- filename ---" markers. Treat them as one combined financial picture — merge all transactions together when calculating totals, categories, and trends. Do not analyze them separately.
+"""
+
 ANALYSIS_PROMPT = """\
 You are a financial analyst. Analyze the following bank statement data and return a JSON object with this exact structure:
 
@@ -66,9 +70,12 @@ $report_json
 """
 
 
-async def analyze_with_gemini(statement_text: str) -> dict:
+async def analyze_with_gemini(statement_text: str, file_count: int = 1) -> dict:
     from string import Template
     prompt = Template(ANALYSIS_PROMPT).safe_substitute(statement_text=statement_text)
+    if file_count > 1:
+        reminder = Template(MULTI_DOC_REMINDER).safe_substitute(file_count=file_count)
+        prompt = reminder + "\n" + prompt
     response = await asyncio.to_thread(
         client.models.generate_content,
         model=MODEL,
