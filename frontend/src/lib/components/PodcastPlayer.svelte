@@ -95,19 +95,15 @@
 		if (!resolvedAudioUrl) return;
 
 		if (resolvedAudioUrl.startsWith('blob:')) {
-			// Local blob URL (from base64) — download directly
+			// Local blob URL (from base64) — download attribute works same-origin
 			const a = document.createElement('a');
 			a.href = resolvedAudioUrl;
 			a.download = 'podcast.mp3';
 			a.click();
 		} else {
-			// External URL (presigned S3) — has Content-Disposition: attachment
-			// Use hidden iframe to avoid navigating away from the page
-			const iframe = document.createElement('iframe');
-			iframe.style.display = 'none';
-			iframe.src = resolvedAudioUrl;
-			document.body.appendChild(iframe);
-			setTimeout(() => iframe.remove(), 10000);
+			// External presigned S3 URL — has Content-Disposition: attachment,
+			// so navigating to it triggers a download, not a page change
+			window.location.href = resolvedAudioUrl;
 		}
 	}
 
