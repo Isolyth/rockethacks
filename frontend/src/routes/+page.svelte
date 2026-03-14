@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import FileUpload from '$lib/components/FileUpload.svelte';
 	import ProgressBar from '$lib/components/ProgressBar.svelte';
 	import Report from '$lib/components/Report.svelte';
@@ -7,6 +8,7 @@
 	import QuestionCard from '$lib/components/QuestionCard.svelte';
 	import ThinkingIndicator from '$lib/components/ThinkingIndicator.svelte';
 	import { startAnalysis, type AnalysisHandle } from '$lib/api';
+	import { auth } from '$lib/stores/auth.svelte';
 	import type {
 		AppState,
 		ProgressEvent,
@@ -17,7 +19,7 @@
 	} from '$lib/types';
 
 	let appState = $state<AppState>('idle');
-	let userState = $state<'unauthenticated' | 'authenticated' | 'guest'>('unauthenticated');
+	let guestMode = $state(false);
 	let progress = $state<ProgressEvent>({ step: 'parsing', message: '', percent: 0 });
 	let report = $state<FinancialReport | null>(null);
 	let podcastAudio = $state<PodcastAudio | null>(null);
@@ -27,8 +29,8 @@
 	let thinkingText = $state('');
 	let analysisHandle = $state<AnalysisHandle | null>(null);
 
-	// Whether we're still processing (report shown but podcast still generating)
 	let stillProcessing = $derived(appState === 'processing' && report !== null);
+	let showHero = $derived(!guestMode && !auth.loading && !auth.user);
 
 	function handleUpload(files: File[], language: string) {
 		appState = 'processing';
@@ -37,42 +39,42 @@
 		report = null;
 		podcastAudio = null;
 
-		analysisHandle = startAnalysis(
+		analysisHandle = startAnalysis({
 			files,
 			language,
-			(evt) => {
+			onProgress: (evt) => {
 				progress = evt;
 				thinkingText = '';
 			},
-			(rpt) => {
+			onReportReady: (rpt) => {
 				report = rpt;
 			},
-			(audio) => {
+			onPodcastAudioReady: (audio) => {
 				podcastAudio = audio;
 				appState = 'done';
 				analysisHandle = null;
 			},
-			(msg) => {
+			onError: (msg) => {
 				errorMessage = msg;
 				appState = 'error';
 				analysisHandle = null;
 			},
-			(req) => {
+			onDocumentRequest: (req) => {
 				documentRequest = req;
 				appState = 'awaiting_documents';
 				thinkingText = '';
 				progress = { step: 'analyzing', message: 'Agent needs additional information', percent: 50 };
 			},
-			(q) => {
+			onAskQuestion: (q) => {
 				agentQuestion = q;
 				appState = 'awaiting_answer';
 				thinkingText = '';
 				progress = { step: 'analyzing', message: 'Agent has a question for you', percent: 50 };
 			},
-			(text) => {
+			onThinking: (text) => {
 				thinkingText = text;
 			}
-		);
+		});
 	}
 
 	async function handleDocumentResponse(action: 'upload' | 'skip', files?: File[]) {
@@ -111,30 +113,24 @@
 	<title>Easy MonAI - Bank Statement Analyzer</title>
 </svelte:head>
 
-<header class="app-header">
-	<div class="header-content">
-		<div class="logo">Easy MonAI</div>
-		<div class="user-status">
-			{#if userState === 'unauthenticated'}
-				<button class="login-btn-small" onclick={() => userState = 'authenticated'}>Login</button>
-			{:else if userState === 'authenticated'}
-				<span class="status-text">Logged In</span>
-			{:else if userState === 'guest'}
-				<span class="status-text">Guest Mode</span>
-			{/if}
-		</div>
-	</div>
-</header>
-
 <main>
 	<div class="content">
-		{#if userState === 'unauthenticated'}
+		{#if showHero}
 			<div class="hero">
 				<h1>Easy MonAI</h1>
 				<p class="tagline">Your financial life, analyzed and narrated by AI</p>
 				<div class="hero-actions">
-					<button class="primary-btn" onclick={() => userState = 'authenticated'}>Log In / Sign Up</button>
-					<button class="ghost-btn" onclick={() => userState = 'guest'}>Continue as Guest</button>
+					<button class="primary-btn" onclick={() => goto('/login')}>Log In / Sign Up</button>
+					<button class="ghost-btn" onclick={() => (guestMode = true)}>Continue as Guest</button>
+				</div>
+			</div>
+		{:else if auth.user && !guestMode && appState === 'idle'}
+			<div class="hero">
+				<h1>Easy MonAI</h1>
+				<p class="tagline">Welcome back, {auth.user.display_name}!</p>
+				<div class="hero-actions">
+					<button class="primary-btn" onclick={() => goto('/analyze')}>New Analysis</button>
+					<button class="ghost-btn" onclick={() => goto('/dashboard')}>View Dashboard</button>
 				</div>
 			</div>
 		{:else if appState === 'idle'}
@@ -153,7 +149,6 @@
 			</div>
 		{:else}
 			{#if report}
-				<!-- Two-column results layout -->
 				<div class="results-grid">
 					<div class="results-col results-col--left">
 						<Report {report} />
@@ -177,7 +172,6 @@
 					<button class="reset-btn" onclick={reset} type="button">Analyze more statements</button>
 				{/if}
 			{:else if appState === 'processing'}
-				<!-- No report yet: centered progress -->
 				<ProgressBar {progress} />
 				{#if progress.step === 'analyzing'}
 					<ThinkingIndicator text={thinkingText} />
@@ -188,50 +182,6 @@
 </main>
 
 <style>
-	.app-header {
-		position: sticky;
-		top: 0;
-		width: 100%;
-		background: var(--color-surface);
-		border-bottom: 1px solid var(--color-border);
-		z-index: 100;
-	}
-
-	.header-content {
-		max-width: 1400px;
-		margin: 0 auto;
-		padding: 1rem 1.5rem;
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
-
-	.logo {
-		font-weight: 700;
-		font-size: 1.25rem;
-		color: var(--color-text);
-	}
-
-	.login-btn-small {
-		padding: 0.5rem 1rem;
-		background: transparent;
-		color: var(--color-text);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
-		font-size: 0.875rem;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.login-btn-small:hover {
-		border-color: var(--color-primary);
-	}
-
-	.status-text {
-		font-size: 0.875rem;
-		color: var(--color-text-muted);
-	}
-
 	.hero {
 		text-align: center;
 		padding: 4rem 1rem;
@@ -263,13 +213,13 @@
 		gap: 1rem;
 		margin-top: 1rem;
 	}
-	
+
 	@media (max-width: 600px) {
 		.hero-actions {
 			flex-direction: column;
 			width: 100%;
 		}
-		
+
 		.hero-actions > button {
 			width: 100%;
 		}

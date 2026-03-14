@@ -61,3 +61,56 @@ class AnalysisResult(BaseModel):
 class DocumentRequest(BaseModel):
     document_type: str
     reason: str
+
+
+# --- Auth & Dashboard models ---
+
+class SignupRequest(BaseModel):
+    email: str
+    password: str
+    display_name: str | None = None
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    display_name: str
+
+
+class AuthResponse(BaseModel):
+    token: str
+    user: UserResponse
+
+
+class ReportSummaryItem(BaseModel):
+    id: str
+    title: str
+    created_at: str
+    language: str
+    total_income: float
+    total_expenses: float
+    net_savings: float
+
+
+class ReportDetail(BaseModel):
+    id: str
+    title: str
+    created_at: str
+    language: str
+    report: FinancialReport
+    podcast_script: str
+    audio_url: str | None = None
+    statements: list[dict] = []
+
+
+class StatementItem(BaseModel):
+    id: str
+    filename: str
+    uploaded_at: str
+    file_type: str
+    file_size: int

@@ -19,6 +19,20 @@ ELEVENLABS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"  # George
 ELEVENLABS_MODEL_ID = "eleven_flash_v2_5"
 ELEVENLABS_OUTPUT_FORMAT = "mp3_44100_128"
 
+# AWS
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+AWS_S3_BUCKET = os.getenv("AWS_S3_BUCKET", "monai-uploads")
+
+# Cognito
+COGNITO_USER_POOL_ID = os.getenv("COGNITO_USER_POOL_ID")
+COGNITO_CLIENT_ID = os.getenv("COGNITO_CLIENT_ID")
+
+# DynamoDB
+DYNAMO_REPORTS_TABLE = os.getenv("DYNAMO_REPORTS_TABLE", "monai-reports")
+DYNAMO_STATEMENTS_TABLE = os.getenv("DYNAMO_STATEMENTS_TABLE", "monai-statements")
+
 # CORS
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
 

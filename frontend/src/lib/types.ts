@@ -90,3 +90,45 @@ export type AppState =
 	| 'awaiting_answer'
 	| 'done'
 	| 'error';
+
+// Auth & Dashboard types
+
+export interface UserResponse {
+	id: string;
+	email: string;
+	display_name: string;
+}
+
+export interface AuthResponse {
+	token: string;
+	user: UserResponse;
+}
+
+export interface ReportSummaryItem {
+	id: string;
+	title: string;
+	created_at: string;
+	language: string;
+	total_income: number;
+	total_expenses: number;
+	net_savings: number;
+}
+
+export interface ReportDetail {
+	id: string;
+	title: string;
+	created_at: string;
+	language: string;
+	report: FinancialReport;
+	podcast_script: string;
+	audio_url: string | null;
+	statements: { id: string; filename: string; file_type: string }[];
+}
+
+export interface StatementItem {
+	id: string;
+	filename: string;
+	uploaded_at: string;
+	file_type: string;
+	file_size: number;
+}

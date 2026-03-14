@@ -3,8 +3,15 @@ import type {
 	FinancialReport,
 	PodcastAudio,
 	DocumentRequest,
-	AgentQuestion
+	AgentQuestion,
+	AuthResponse,
+	UserResponse,
+	ReportSummaryItem,
+	ReportDetail,
+	StatementItem
 } from './types';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export interface AnalysisHandle {
 	respond: (action: 'upload' | 'skip', files?: File[]) => Promise<void>;
@@ -31,34 +38,135 @@ async function filesToPayload(files: File[]): Promise<{ name: string; content: s
 	);
 }
 
-export function startAnalysis(
-	files: File[],
-	language: string,
-	onProgress: (event: ProgressEvent) => void,
-	onReportReady: (report: FinancialReport) => void,
-	onPodcastAudioReady: (audio: PodcastAudio) => void,
-	onError: (message: string) => void,
-	onDocumentRequest: (request: DocumentRequest) => void,
-	onAskQuestion: (question: AgentQuestion) => void,
-	onThinking: (text: string) => void
-): AnalysisHandle {
-	const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/analyze';
+// --- REST API functions ---
+
+async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
+	return fetch(`${API_URL}${path}`, {
+		...options,
+		headers: {
+			'Content-Type': 'application/json',
+			...options.headers
+		}
+	});
+}
+
+function authHeaders(token: string): HeadersInit {
+	return { Authorization: `Bearer ${token}` };
+}
+
+export async function signup(
+	email: string,
+	password: string,
+	displayName?: string
+): Promise<AuthResponse> {
+	const resp = await apiFetch('/auth/signup', {
+		method: 'POST',
+		body: JSON.stringify({ email, password, display_name: displayName || undefined })
+	});
+	if (!resp.ok) {
+		const err = await resp.json().catch(() => ({ detail: 'Signup failed' }));
+		throw new Error(err.detail || 'Signup failed');
+	}
+	return resp.json();
+}
+
+export async function login(email: string, password: string): Promise<AuthResponse> {
+	const resp = await apiFetch('/auth/login', {
+		method: 'POST',
+		body: JSON.stringify({ email, password })
+	});
+	if (!resp.ok) {
+		const err = await resp.json().catch(() => ({ detail: 'Login failed' }));
+		throw new Error(err.detail || 'Login failed');
+	}
+	return resp.json();
+}
+
+export async function fetchReports(token: string): Promise<ReportSummaryItem[]> {
+	const resp = await apiFetch('/dashboard/reports', { headers: authHeaders(token) });
+	if (!resp.ok) throw new Error('Failed to fetch reports');
+	return resp.json();
+}
+
+export async function fetchReport(token: string, reportId: string): Promise<ReportDetail> {
+	const resp = await apiFetch(`/dashboard/reports/${reportId}`, {
+		headers: authHeaders(token)
+	});
+	if (!resp.ok) throw new Error('Failed to fetch report');
+	return resp.json();
+}
+
+export async function fetchStatements(token: string): Promise<StatementItem[]> {
+	const resp = await apiFetch('/dashboard/statements', { headers: authHeaders(token) });
+	if (!resp.ok) throw new Error('Failed to fetch statements');
+	return resp.json();
+}
+
+export async function deleteReport(token: string, reportId: string): Promise<void> {
+	const resp = await apiFetch(`/dashboard/reports/${reportId}`, {
+		method: 'DELETE',
+		headers: authHeaders(token)
+	});
+	if (!resp.ok) throw new Error('Failed to delete report');
+}
+
+export async function deleteStatement(token: string, statementId: string): Promise<void> {
+	const resp = await apiFetch(`/dashboard/statements/${statementId}`, {
+		method: 'DELETE',
+		headers: authHeaders(token)
+	});
+	if (!resp.ok) throw new Error('Failed to delete statement');
+}
+
+// --- WebSocket analysis ---
+
+interface AnalysisOptions {
+	files: File[];
+	language: string;
+	token?: string | null;
+	savedStatementIds?: string[];
+	onProgress: (event: ProgressEvent) => void;
+	onReportReady: (report: FinancialReport) => void;
+	onPodcastAudioReady: (audio: PodcastAudio & { report_id?: string }) => void;
+	onError: (message: string) => void;
+	onDocumentRequest: (request: DocumentRequest) => void;
+	onAskQuestion: (question: AgentQuestion) => void;
+	onThinking: (text: string) => void;
+}
+
+export function startAnalysis(opts: AnalysisOptions): AnalysisHandle {
+	const baseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/analyze';
+	const wsUrl = opts.token ? `${baseUrl}?token=${opts.token}` : baseUrl;
 	const ws = new WebSocket(wsUrl);
 	let open = false;
 
 	ws.onopen = async () => {
 		open = true;
 		try {
-			const payload = await filesToPayload(files);
-			ws.send(
-				JSON.stringify({
-					type: 'upload_files',
-					files: payload,
-					language
-				})
-			);
+			if (opts.savedStatementIds && opts.savedStatementIds.length > 0) {
+				// Use saved statements flow
+				const newFiles =
+					opts.files.length > 0 ? await filesToPayload(opts.files) : undefined;
+				ws.send(
+					JSON.stringify({
+						type: 'use_saved_statements',
+						statement_ids: opts.savedStatementIds,
+						files: newFiles,
+						language: opts.language
+					})
+				);
+			} else {
+				const payload = await filesToPayload(opts.files);
+				ws.send(
+					JSON.stringify({
+						type: 'upload_files',
+						files: payload,
+						language: opts.language
+					})
+				);
+			}
 		} catch {
-			onError('Failed to read files');
+			opts.onError('Failed to read files');
 		}
 	};
 
@@ -67,25 +175,25 @@ export function startAnalysis(
 			const data = JSON.parse(event.data);
 			switch (data.type) {
 				case 'progress':
-					onProgress(data);
+					opts.onProgress(data);
 					break;
 				case 'thinking':
-					onThinking(data.text);
+					opts.onThinking(data.text);
 					break;
 				case 'request_documents':
-					onDocumentRequest(data);
+					opts.onDocumentRequest(data);
 					break;
 				case 'ask_question':
-					onAskQuestion(data);
+					opts.onAskQuestion(data);
 					break;
 				case 'report_ready':
-					onReportReady(data.report);
+					opts.onReportReady(data.report);
 					break;
 				case 'podcast_audio_ready':
-					onPodcastAudioReady(data);
+					opts.onPodcastAudioReady(data);
 					break;
 				case 'error':
-					onError(data.message);
+					opts.onError(data.message);
 					break;
 			}
 		} catch (e) {
@@ -94,7 +202,7 @@ export function startAnalysis(
 	};
 
 	ws.onerror = () => {
-		onError('WebSocket connection error. Is the backend running?');
+		opts.onError('WebSocket connection error. Is the backend running?');
 	};
 
 	ws.onclose = () => {

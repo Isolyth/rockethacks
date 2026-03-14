@@ -1,8 +1,10 @@
+import asyncio
 import base64
 import json
 import logging
 import time
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -10,6 +12,9 @@ from services.parser import parse_pdf, parse_csv
 from services.gemini import analyze_with_gemini_agent, generate_podcast_script
 from services.elevenlabs_tts import generate_podcast_audio
 from services.session import Session, sessions
+from services.auth import get_user_from_token
+from services.dynamo import save_report, save_statement, get_statement
+from services.storage import upload_statement, upload_audio, get_statement_bytes
 from models.schemas import FinancialReport
 
 logger = logging.getLogger("uvicorn.error")
@@ -35,6 +40,89 @@ def parse_file_data(name: str, content_bytes: bytes) -> str | None:
     return None
 
 
+async def _save_statement_to_aws(user_id: str, name: str, content_bytes: bytes) -> str | None:
+    """Save a statement to S3 and DynamoDB. Returns statement_id or None."""
+    statement_id = uuid.uuid4().hex
+    file_type = "pdf" if name.lower().endswith(".pdf") else "csv"
+
+    s3_key = await upload_statement(user_id, statement_id, name, content_bytes)
+
+    await save_statement(user_id, statement_id, {
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "filename": name,
+        "s3_key": s3_key or "",
+        "file_size": len(content_bytes),
+        "file_type": file_type,
+    })
+    return statement_id
+
+
+async def _save_report_to_aws(user_id: str, report_data: dict, podcast_script: str,
+                               audio_base64: str | None, language: str,
+                               statement_ids: list[str]) -> str | None:
+    """Save a completed report to DynamoDB (and audio to S3). Returns report_id."""
+    report_id = uuid.uuid4().hex
+
+    # Upload audio to S3 if present
+    audio_s3_key = None
+    if audio_base64:
+        audio_bytes = base64.b64decode(audio_base64)
+        audio_s3_key = await upload_audio(user_id, report_id, audio_bytes)
+
+    # Derive title from date_range
+    date_range = report_data.get("summary", {}).get("date_range", "")
+    title = f"{date_range} Analysis" if date_range else "Financial Analysis"
+
+    await save_report(user_id, report_id, {
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "language": language,
+        "title": title,
+        "report": report_data,
+        "podcast_script": podcast_script,
+        "audio_s3_key": audio_s3_key,
+        "statement_ids": statement_ids,
+    })
+
+    logger.info(f"Saved report {report_id} for user {user_id}")
+    return report_id
+
+
+async def _parse_and_save_files(files: list[dict], user_id: str | None):
+    """Parse uploaded files and optionally save to S3/DynamoDB.
+
+    Returns (all_text, statement_ids, file_count) or (None, bad_filename, []) on error.
+    """
+    text_parts = []
+    statement_ids = []
+    save_tasks = []
+
+    for f in files:
+        name = f["name"]
+        content_bytes = base64.b64decode(f["content"])
+        logger.info(f"  Reading {name} ({len(content_bytes)} bytes)")
+
+        text = parse_file_data(name, content_bytes)
+        if text is None:
+            return None, name, []
+
+        logger.info(f"  Parsed: {len(text)} chars extracted")
+        text_parts.append(f"\n--- {name} ---\n{text}")
+
+        if user_id:
+            save_tasks.append(_save_statement_to_aws(user_id, name, content_bytes))
+
+    # Save statements concurrently
+    if save_tasks:
+        results = await asyncio.gather(*save_tasks, return_exceptions=True)
+        for r in results:
+            if isinstance(r, str):
+                statement_ids.append(r)
+            elif isinstance(r, Exception):
+                logger.error(f"Failed to save statement: {r}")
+
+    return "".join(text_parts), None, statement_ids
+
+
 @router.websocket("/ws/analyze")
 async def ws_analyze(ws: WebSocket):
     await ws.accept()
@@ -42,8 +130,20 @@ async def ws_analyze(ws: WebSocket):
     session = Session(session_id=session_id)
     sessions[session_id] = session
 
+    # Authenticate if token provided
+    token = ws.query_params.get("token")
+    if token:
+        user_info = await get_user_from_token(token)
+        if user_info is None:
+            await send_json(ws, {"type": "error", "message": "Invalid or expired token"})
+            await ws.close(code=4001, reason="Invalid token")
+            sessions.pop(session_id, None)
+            return
+        session.user_id = user_info["id"]
+        logger.info(f"Authenticated WebSocket session for user {session.user_id}")
+
     try:
-        # Step 1: Receive initial files from client
+        # Step 1: Receive initial message from client
         raw = await ws.receive_text()
         try:
             msg = json.loads(raw)
@@ -51,38 +151,80 @@ async def ws_analyze(ws: WebSocket):
             await send_json(ws, {"type": "error", "message": "Invalid message format"})
             return
 
-        if msg.get("type") != "upload_files" or not msg.get("files"):
-            await send_json(ws, {"type": "error", "message": "Expected upload_files message with files"})
-            return
-
         t0 = time.time()
-        files = msg["files"]
         language = msg.get("language", "en")
         session.language = language
-        file_names = [f["name"] for f in files]
-        logger.info(f"=== WS /ws/analyze with {len(files)} file(s): {file_names} lang={language} ===")
+        statement_ids: list[str] = []
 
-        await send_progress(ws, "parsing", "Extracting text from uploaded files...", 10)
+        msg_type = msg.get("type")
 
-        # Parse all files
-        text_parts = []
-        for f in files:
-            name = f["name"]
-            content_bytes = base64.b64decode(f["content"])
-            logger.info(f"  Reading {name} ({len(content_bytes)} bytes)")
+        if msg_type == "use_saved_statements":
+            # Authenticated user re-analyzing saved statements
+            if not session.user_id:
+                await send_json(ws, {"type": "error", "message": "Authentication required for saved statements"})
+                return
 
-            text = parse_file_data(name, content_bytes)
-            if text is None:
+            saved_ids = msg.get("statement_ids", [])
+            new_files = msg.get("files", [])
+
+            logger.info(f"=== WS /ws/analyze with {len(saved_ids)} saved + {len(new_files)} new file(s) lang={language} ===")
+            await send_progress(ws, "parsing", "Loading saved statements...", 10)
+
+            # Load saved statements from S3
+            text_parts = []
+            for sid in saved_ids:
+                stmt = await get_statement(session.user_id, sid)
+                if stmt and stmt.get("s3_key"):
+                    try:
+                        content_bytes = await get_statement_bytes(stmt["s3_key"])
+                        text = parse_file_data(stmt["filename"], content_bytes)
+                        if text:
+                            text_parts.append(f"\n--- {stmt['filename']} ---\n{text}")
+                            statement_ids.append(sid)
+                            logger.info(f"  Loaded saved: {stmt['filename']} ({len(text)} chars)")
+                    except Exception as e:
+                        logger.error(f"  Failed to load saved statement {sid}: {e}")
+
+            # Parse and save new files
+            if new_files:
+                all_new_text, bad_name, new_sids = await _parse_and_save_files(new_files, session.user_id)
+                if all_new_text is None:
+                    await send_json(ws, {
+                        "type": "error",
+                        "message": f"Unsupported file type: {bad_name}. Please upload PDF or CSV files.",
+                    })
+                    return
+                text_parts.append(all_new_text)
+                statement_ids.extend(new_sids)
+
+            all_text = "".join(text_parts)
+            file_count = len(saved_ids) + len(new_files)
+
+        elif msg_type == "upload_files" and msg.get("files"):
+            files = msg["files"]
+            file_names = [f["name"] for f in files]
+            logger.info(f"=== WS /ws/analyze with {len(files)} file(s): {file_names} lang={language} ===")
+
+            await send_progress(ws, "parsing", "Extracting text from uploaded files...", 10)
+
+            all_text, bad_name, statement_ids = await _parse_and_save_files(files, session.user_id)
+            if all_text is None:
                 await send_json(ws, {
                     "type": "error",
-                    "message": f"Unsupported file type: {name}. Please upload PDF or CSV files.",
+                    "message": f"Unsupported file type: {bad_name}. Please upload PDF or CSV files.",
                 })
                 return
 
-            logger.info(f"  Parsed: {len(text)} chars extracted")
-            text_parts.append(f"\n--- {name} ---\n{text}")
+            file_count = len(files)
 
-        all_text = "".join(text_parts)
+        else:
+            await send_json(ws, {"type": "error", "message": "Expected upload_files or use_saved_statements message"})
+            return
+
+        if not all_text.strip():
+            await send_json(ws, {"type": "error", "message": "No text could be extracted from the files"})
+            return
+
         logger.info(f"[1/5] Parsing done. Total text: {len(all_text)} chars ({time.time() - t0:.1f}s)")
         await send_progress(ws, "parsing", "Files parsed successfully", 25)
 
@@ -94,7 +236,7 @@ async def ws_analyze(ws: WebSocket):
         report_data = None
 
         async for event_type, event_data in analyze_with_gemini_agent(
-            all_text, file_count=len(files), session=session, language=language
+            all_text, file_count=file_count, session=session, language=language
         ):
             if event_type == "thinking":
                 await send_json(ws, {
@@ -127,6 +269,15 @@ async def ws_analyze(ws: WebSocket):
                         if text:
                             new_parts.append(f"\n--- {name} ---\n{text}")
                             logger.info(f"  Additional file: {name} ({len(text)} chars)")
+
+                            # Save additional files for authenticated users
+                            if session.user_id:
+                                try:
+                                    sid = await _save_statement_to_aws(session.user_id, name, content_bytes)
+                                    if sid:
+                                        statement_ids.append(sid)
+                                except Exception as e:
+                                    logger.error(f"Failed to save additional statement: {e}")
 
                     session.user_response = {"action": "upload", "document_text": "".join(new_parts)}
                 else:
@@ -196,30 +347,40 @@ async def ws_analyze(ws: WebSocket):
         await send_progress(ws, "narrating", "Generating audio narration...", 80)
 
         t3 = time.time()
+        audio_base64_result = None
+        sentences_result = []
         try:
             audio_result = await generate_podcast_audio(podcast_script, language=language)
-            logger.info(f"[4/5] Audio done ({time.time() - t3:.1f}s, {len(audio_result['sentences'])} sentences)")
-
+            audio_base64_result = audio_result["audio_base64"]
+            sentences_result = audio_result["sentences"]
+            logger.info(f"[4/5] Audio done ({time.time() - t3:.1f}s, {len(sentences_result)} sentences)")
             await send_progress(ws, "narrating", "Audio narration complete!", 95)
-
-            # Step 5: Send podcast audio
-            logger.info(f"[5/5] Sending result. Total time: {time.time() - t0:.1f}s")
-            await send_json(ws, {
-                "type": "podcast_audio_ready",
-                "podcast_script": podcast_script,
-                "audio_base64": audio_result["audio_base64"],
-                "sentences": audio_result["sentences"],
-            })
         except Exception as e:
             logger.error(f"[4/5] ElevenLabs TTS failed: {e}", exc_info=True)
             await send_progress(ws, "narrating", "Audio generation failed — showing script only", 95)
-            # Fallback: send script without audio
-            await send_json(ws, {
-                "type": "podcast_audio_ready",
-                "podcast_script": podcast_script,
-                "audio_base64": None,
-                "sentences": [],
-            })
+
+        # Save report for authenticated users
+        report_id = None
+        if session.user_id:
+            try:
+                report_id = await _save_report_to_aws(
+                    session.user_id, report_data, podcast_script,
+                    audio_base64_result, language, statement_ids,
+                )
+            except Exception as e:
+                logger.error(f"Failed to save report: {e}", exc_info=True)
+
+        # Step 5: Send podcast audio
+        logger.info(f"[5/5] Sending result. Total time: {time.time() - t0:.1f}s")
+        response = {
+            "type": "podcast_audio_ready",
+            "podcast_script": podcast_script,
+            "audio_base64": audio_base64_result,
+            "sentences": sentences_result,
+        }
+        if report_id:
+            response["report_id"] = report_id
+        await send_json(ws, response)
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected (session {session_id})")
