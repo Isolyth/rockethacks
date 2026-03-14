@@ -289,7 +289,7 @@
 		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
 		border: none;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-pill);
 		padding: 0 1.25rem;
 		height: 48px;
 		font-weight: 600;

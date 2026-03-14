@@ -247,7 +247,7 @@
 		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
 		border: none;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-pill);
 		font-size: 0.875rem;
 		font-weight: 600;
 		transition: filter 0.2s;

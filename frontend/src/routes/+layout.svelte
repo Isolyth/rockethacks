@@ -92,7 +92,7 @@
 		text-decoration: none;
 		font-size: 0.875rem;
 		padding: 0.4rem 0.75rem;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-pill);
 		transition: all 0.2s;
 	}
 
@@ -112,7 +112,7 @@
 		background: transparent;
 		color: var(--color-text-muted);
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-pill);
 		font-size: 0.875rem;
 		cursor: pointer;
 		transition: all 0.2s;

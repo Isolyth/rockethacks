@@ -17,6 +17,7 @@
 	--gradient-gold-btn: linear-gradient(135deg, #B9822C 0%, #F6E27A 30%, #D5A629 55%, #F6D767 80%, #B9822C 100%);
 	--radius: 12px;
 	--radius-sm: 8px;
+	--radius-pill: 9999px;
 }
 
 *,

@@ -199,7 +199,7 @@
 		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
 		border: none;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-pill);
 		font-size: 0.9rem;
 		font-weight: 600;
 		cursor: pointer;
@@ -352,7 +352,7 @@
 		background: var(--color-surface-2);
 		color: var(--color-text);
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-pill);
 		font-size: 0.8rem;
 		cursor: pointer;
 		transition: all 0.2s;
@@ -367,7 +367,7 @@
 		background: transparent;
 		color: var(--color-text-muted);
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-pill);
 		font-size: 0.8rem;
 		cursor: pointer;
 		transition: all 0.2s;

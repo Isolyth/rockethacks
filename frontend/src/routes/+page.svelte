@@ -294,7 +294,7 @@
 		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
 		border: none;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-pill);
 		font-size: 1rem;
 		font-weight: 600;
 		cursor: pointer;
@@ -310,7 +310,7 @@
 		background: transparent;
 		color: var(--color-text);
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-pill);
 		font-size: 1rem;
 		font-weight: 600;
 		cursor: pointer;
@@ -413,7 +413,7 @@
 		background: var(--color-surface-2);
 		color: var(--color-text);
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-pill);
 		font-size: 0.9rem;
 		transition: all 0.2s;
 	}

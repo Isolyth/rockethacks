@@ -128,7 +128,7 @@
 		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
 		border: none;
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-pill);
 		font-size: 1rem;
 		font-weight: 600;
 		cursor: pointer;
