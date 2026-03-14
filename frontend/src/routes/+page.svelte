@@ -1,41 +1,51 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import FileUpload from '$lib/components/FileUpload.svelte';
-	import ProgressBar from '$lib/components/ProgressBar.svelte';
-	import Report from '$lib/components/Report.svelte';
-	import PodcastPlayer from '$lib/components/PodcastPlayer.svelte';
-	import DocumentRequestCard from '$lib/components/DocumentRequest.svelte';
-	import QuestionCard from '$lib/components/QuestionCard.svelte';
-	import ThinkingIndicator from '$lib/components/ThinkingIndicator.svelte';
-	import { startAnalysis, type AnalysisHandle } from '$lib/api';
-	import { auth } from '$lib/stores/auth.svelte';
+	import { goto } from "$app/navigation";
+	import FileUpload from "$lib/components/FileUpload.svelte";
+	import ProgressBar from "$lib/components/ProgressBar.svelte";
+	import Report from "$lib/components/Report.svelte";
+	import PodcastPlayer from "$lib/components/PodcastPlayer.svelte";
+	import DocumentRequestCard from "$lib/components/DocumentRequest.svelte";
+	import QuestionCard from "$lib/components/QuestionCard.svelte";
+	import ThinkingIndicator from "$lib/components/ThinkingIndicator.svelte";
+	import { startAnalysis, type AnalysisHandle } from "$lib/api";
+	import { auth } from "$lib/stores/auth.svelte";
 	import type {
 		AppState,
 		ProgressEvent,
 		FinancialReport,
 		PodcastAudio,
 		DocumentRequest,
-		AgentQuestion
-	} from '$lib/types';
+		AgentQuestion,
+	} from "$lib/types";
 
-	let appState = $state<AppState>('idle');
+	let appState = $state<AppState>("idle");
 	let guestMode = $state(false);
-	let progress = $state<ProgressEvent>({ step: 'parsing', message: '', percent: 0 });
+	let progress = $state<ProgressEvent>({
+		step: "parsing",
+		message: "",
+		percent: 0,
+	});
 	let report = $state<FinancialReport | null>(null);
 	let podcastAudio = $state<PodcastAudio | null>(null);
-	let errorMessage = $state('');
+	let errorMessage = $state("");
 	let documentRequest = $state<DocumentRequest | null>(null);
 	let agentQuestion = $state<AgentQuestion | null>(null);
-	let thinkingText = $state('');
+	let thinkingText = $state("");
 	let analysisHandle = $state<AnalysisHandle | null>(null);
 
-	let stillProcessing = $derived(appState === 'processing' && report !== null);
+	let stillProcessing = $derived(
+		appState === "processing" && report !== null,
+	);
 	let showHero = $derived(!guestMode && !auth.loading && !auth.user);
 
 	function handleUpload(files: File[], language: string) {
-		appState = 'processing';
-		progress = { step: 'parsing', message: 'Uploading files...', percent: 5 };
-		errorMessage = '';
+		appState = "processing";
+		progress = {
+			step: "parsing",
+			message: "Uploading files...",
+			percent: 5,
+		};
+		errorMessage = "";
 		report = null;
 		podcastAudio = null;
 
@@ -44,52 +54,71 @@
 			language,
 			onProgress: (evt) => {
 				progress = evt;
-				thinkingText = '';
+				thinkingText = "";
 			},
 			onReportReady: (rpt) => {
 				report = rpt;
 			},
 			onPodcastAudioReady: (audio) => {
 				podcastAudio = audio;
-				appState = 'done';
+				appState = "done";
 				analysisHandle = null;
 			},
 			onError: (msg) => {
 				errorMessage = msg;
-				appState = 'error';
+				appState = "error";
 				analysisHandle = null;
 			},
 			onDocumentRequest: (req) => {
 				documentRequest = req;
-				appState = 'awaiting_documents';
-				thinkingText = '';
-				progress = { step: 'analyzing', message: 'Agent needs additional information', percent: 50 };
+				appState = "awaiting_documents";
+				thinkingText = "";
+				progress = {
+					step: "analyzing",
+					message: "Agent needs additional information",
+					percent: 50,
+				};
 			},
 			onAskQuestion: (q) => {
 				agentQuestion = q;
-				appState = 'awaiting_answer';
-				thinkingText = '';
-				progress = { step: 'analyzing', message: 'Agent has a question for you', percent: 50 };
+				appState = "awaiting_answer";
+				thinkingText = "";
+				progress = {
+					step: "analyzing",
+					message: "Agent has a question for you",
+					percent: 50,
+				};
 			},
 			onThinking: (text) => {
 				thinkingText = text;
-			}
+			},
 		});
 	}
 
-	async function handleDocumentResponse(action: 'upload' | 'skip', files?: File[]) {
+	async function handleDocumentResponse(
+		action: "upload" | "skip",
+		files?: File[],
+	) {
 		if (!analysisHandle) return;
 		await analysisHandle.respond(action, files);
-		appState = 'processing';
-		progress = { step: 'analyzing', message: 'Continuing analysis...', percent: 55 };
+		appState = "processing";
+		progress = {
+			step: "analyzing",
+			message: "Continuing analysis...",
+			percent: 55,
+		};
 		documentRequest = null;
 	}
 
 	function handleQuestionAnswer(answer: string) {
 		if (!analysisHandle) return;
 		analysisHandle.answerQuestion(answer);
-		appState = 'processing';
-		progress = { step: 'analyzing', message: 'Continuing analysis...', percent: 55 };
+		appState = "processing";
+		progress = {
+			step: "analyzing",
+			message: "Continuing analysis...",
+			percent: 55,
+		};
 		agentQuestion = null;
 	}
 
@@ -98,14 +127,22 @@
 			analysisHandle.close();
 			analysisHandle = null;
 		}
-		appState = 'idle';
+		appState = "idle";
 		report = null;
 		podcastAudio = null;
-		errorMessage = '';
+		errorMessage = "";
 		documentRequest = null;
 		agentQuestion = null;
-		thinkingText = '';
-		progress = { step: 'parsing', message: '', percent: 0 };
+		thinkingText = "";
+		progress = { step: "parsing", message: "", percent: 0 };
+	}
+
+	function handleBack() {
+		if (appState !== "idle") {
+			reset();
+		} else if (guestMode) {
+			guestMode = false;
+		}
 	}
 </script>
 
@@ -115,67 +152,94 @@
 
 <main>
 	<div class="content">
+		{#if !showHero && (guestMode || appState !== "idle")}
+			<div class="top-bar">
+				<button class="back-btn" onclick={handleBack} type="button">
+					<span class="back-icon">←</span> Back
+				</button>
+			</div>
+		{/if}
 		{#if showHero}
 			<div class="hero">
 				<h1>Easy MonAI</h1>
-				<p class="tagline">Your financial life, analyzed and narrated by AI</p>
+				<p class="tagline">
+					Your financial life, analyzed and narrated by AI
+				</p>
 				<div class="hero-actions">
-					<button class="primary-btn" onclick={() => goto('/login')}>Log In / Sign Up</button>
-					<button class="ghost-btn" onclick={() => (guestMode = true)}>Continue as Guest</button>
+					<button class="primary-btn" onclick={() => goto("/login")}
+						>Log In / Sign Up</button
+					>
+					<button class="ghost-btn" onclick={() => (guestMode = true)}
+						>Continue as Guest</button
+					>
 				</div>
 			</div>
-		{:else if auth.user && !guestMode && appState === 'idle'}
+		{:else if auth.user && !guestMode && appState === "idle"}
 			<div class="hero">
 				<h1>Easy MonAI</h1>
 				<p class="tagline">Welcome back, {auth.user.display_name}!</p>
 				<div class="hero-actions">
-					<button class="primary-btn" onclick={() => goto('/analyze')}>New Analysis</button>
-					<button class="ghost-btn" onclick={() => goto('/dashboard')}>View Dashboard</button>
+					<button class="primary-btn" onclick={() => goto("/analyze")}
+						>New Analysis</button
+					>
+					<button class="ghost-btn" onclick={() => goto("/dashboard")}
+						>View Dashboard</button
+					>
 				</div>
 			</div>
-		{:else if appState === 'idle'}
+		{:else if appState === "idle"}
 			<FileUpload onupload={handleUpload} />
-		{:else if appState === 'awaiting_documents' && documentRequest}
+		{:else if appState === "awaiting_documents" && documentRequest}
 			<ProgressBar {progress} />
-			<DocumentRequestCard request={documentRequest} onrespond={handleDocumentResponse} />
-		{:else if appState === 'awaiting_answer' && agentQuestion}
+			<DocumentRequestCard
+				request={documentRequest}
+				onrespond={handleDocumentResponse}
+			/>
+		{:else if appState === "awaiting_answer" && agentQuestion}
 			<ProgressBar {progress} />
-			<QuestionCard question={agentQuestion} onAnswer={handleQuestionAnswer} />
-		{:else if appState === 'error'}
+			<QuestionCard
+				question={agentQuestion}
+				onAnswer={handleQuestionAnswer}
+			/>
+		{:else if appState === "error"}
 			<div class="error-card">
 				<p class="error-icon">!</p>
 				<p class="error-message">{errorMessage}</p>
-				<button class="reset-btn" onclick={reset} type="button">Try again</button>
+				<button class="reset-btn" onclick={reset} type="button"
+					>Try again</button
+				>
 			</div>
-		{:else}
-			{#if report}
-				<div class="results-grid">
-					<div class="results-col results-col--left">
-						<Report {report} />
-					</div>
-					<div class="results-col results-col--right">
-						{#if stillProcessing}
-							<ProgressBar {progress} />
-							<p class="generating-hint">Generating your podcast...</p>
-						{/if}
-						{#if podcastAudio}
-							<PodcastPlayer
-								podcastScript={podcastAudio.podcast_script}
-								audioBase64={podcastAudio.audio_base64}
-								sentences={podcastAudio.sentences}
-							/>
-						{/if}
-					</div>
+		{:else if report}
+			<div class="results-grid">
+				<div class="results-col results-col--left">
+					<Report {report} />
 				</div>
+				<div class="results-col results-col--right">
+					{#if stillProcessing}
+						<ProgressBar {progress} />
+						<p class="generating-hint">
+							Generating your podcast...
+						</p>
+					{/if}
+					{#if podcastAudio}
+						<PodcastPlayer
+							podcastScript={podcastAudio.podcast_script}
+							audioBase64={podcastAudio.audio_base64}
+							sentences={podcastAudio.sentences}
+						/>
+					{/if}
+				</div>
+			</div>
 
-				{#if appState === 'done'}
-					<button class="reset-btn" onclick={reset} type="button">Analyze more statements</button>
-				{/if}
-			{:else if appState === 'processing'}
-				<ProgressBar {progress} />
-				{#if progress.step === 'analyzing'}
-					<ThinkingIndicator text={thinkingText} />
-				{/if}
+			{#if appState === "done"}
+				<button class="reset-btn" onclick={reset} type="button"
+					>Analyze more statements</button
+				>
+			{/if}
+		{:else if appState === "processing"}
+			<ProgressBar {progress} />
+			{#if progress.step === "analyzing"}
+				<ThinkingIndicator text={thinkingText} />
 			{/if}
 		{/if}
 	</div>
@@ -256,6 +320,45 @@
 	.ghost-btn:hover {
 		background: var(--color-surface-2);
 		border-color: var(--color-text-muted);
+	}
+
+	.top-bar {
+		width: 100%;
+		max-width: 1400px;
+		display: flex;
+		justify-content: flex-start;
+		margin-bottom: -1rem;
+	}
+
+	.back-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 1rem;
+		background: transparent;
+		color: var(--color-text-muted);
+		border: 1px solid transparent;
+		border-radius: var(--radius-sm);
+		font-size: 0.95rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.back-btn:hover {
+		color: var(--color-text);
+		background: var(--color-surface-2);
+		border-color: var(--color-border);
+		transform: translateX(-2px);
+	}
+
+	.back-icon {
+		font-size: 1.1rem;
+		transition: transform 0.2s ease;
+	}
+
+	.back-btn:hover .back-icon {
+		transform: translateX(-2px);
 	}
 
 	main {
