@@ -43,4 +43,9 @@ export interface AnalysisResult {
 	podcast_script: string;
 }
 
-export type AppState = 'idle' | 'processing' | 'done' | 'error';
+export interface DocumentRequest {
+	document_type: string;
+	reason: string;
+}
+
+export type AppState = 'idle' | 'processing' | 'awaiting_documents' | 'done' | 'error';

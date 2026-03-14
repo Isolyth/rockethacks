@@ -3,20 +3,23 @@
 	import ProgressBar from '$lib/components/ProgressBar.svelte';
 	import Report from '$lib/components/Report.svelte';
 	import PodcastScript from '$lib/components/PodcastScript.svelte';
-	import { uploadAndAnalyze } from '$lib/api';
-	import type { AppState, ProgressEvent, AnalysisResult } from '$lib/types';
+	import DocumentRequestCard from '$lib/components/DocumentRequest.svelte';
+	import { startAnalysis, type AnalysisHandle } from '$lib/api';
+	import type { AppState, ProgressEvent, AnalysisResult, DocumentRequest } from '$lib/types';
 
 	let appState = $state<AppState>('idle');
 	let progress = $state<ProgressEvent>({ step: 'parsing', message: '', percent: 0 });
 	let result = $state<AnalysisResult | null>(null);
 	let errorMessage = $state('');
+	let documentRequest = $state<DocumentRequest | null>(null);
+	let analysisHandle = $state<AnalysisHandle | null>(null);
 
-	async function handleUpload(files: File[]) {
+	function handleUpload(files: File[]) {
 		appState = 'processing';
 		progress = { step: 'parsing', message: 'Uploading files...', percent: 5 };
 		errorMessage = '';
 
-		await uploadAndAnalyze(
+		analysisHandle = startAnalysis(
 			files,
 			(evt) => {
 				progress = evt;
@@ -24,18 +27,38 @@
 			(res) => {
 				result = res;
 				appState = 'done';
+				analysisHandle = null;
 			},
 			(msg) => {
 				errorMessage = msg;
 				appState = 'error';
+				analysisHandle = null;
+			},
+			(req) => {
+				documentRequest = req;
+				appState = 'awaiting_documents';
+				progress = { step: 'analyzing', message: 'Agent needs additional information', percent: 50 };
 			}
 		);
 	}
 
+	async function handleDocumentResponse(action: 'upload' | 'skip', files?: File[]) {
+		if (!analysisHandle) return;
+		await analysisHandle.respond(action, files);
+		appState = 'processing';
+		progress = { step: 'analyzing', message: 'Continuing analysis...', percent: 55 };
+		documentRequest = null;
+	}
+
 	function reset() {
+		if (analysisHandle) {
+			analysisHandle.close();
+			analysisHandle = null;
+		}
 		appState = 'idle';
 		result = null;
 		errorMessage = '';
+		documentRequest = null;
 		progress = { step: 'parsing', message: '', percent: 0 };
 	}
 </script>
@@ -50,6 +73,9 @@
 			<FileUpload onupload={handleUpload} />
 		{:else if appState === 'processing'}
 			<ProgressBar {progress} />
+		{:else if appState === 'awaiting_documents' && documentRequest}
+			<ProgressBar {progress} />
+			<DocumentRequestCard request={documentRequest} onrespond={handleDocumentResponse} />
 		{:else if appState === 'done' && result}
 			<Report report={result.report} />
 			<PodcastScript script={result.podcast_script} />
@@ -73,7 +99,7 @@
 		padding: 3rem 1.5rem;
 	}
 
-.content {
+	.content {
 		display: flex;
 		flex-direction: column;
 		align-items: center;

@@ -27,6 +27,10 @@ build/
 *~
 .DS_Store
 
+# Audio output
+*.mp3
+*.wav
+
 # Testing
 .coverage
 htmlcov/

@@ -38,3 +38,8 @@ class FinancialReport(BaseModel):
 class AnalysisResult(BaseModel):
     report: FinancialReport
     podcast_script: str
+
+
+class DocumentRequest(BaseModel):
+    document_type: str
+    reason: str
