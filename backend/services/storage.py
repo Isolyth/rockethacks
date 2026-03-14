@@ -71,14 +71,18 @@ async def get_statement_bytes(s3_key: str) -> bytes:
     return resp["Body"].read()
 
 
-async def generate_presigned_url(s3_key: str, expires: int = 3600) -> str | None:
+async def generate_presigned_url(s3_key: str, expires: int = 3600,
+                                 download_filename: str | None = None) -> str | None:
     """Generate a presigned URL for a file in S3."""
     s3 = _get_s3()
     if s3 is None:
         return None
+    params: dict = {"Bucket": AWS_S3_BUCKET, "Key": s3_key}
+    if download_filename:
+        params["ResponseContentDisposition"] = f'attachment; filename="{download_filename}"'
     return await asyncio.to_thread(
         s3.generate_presigned_url,
         "get_object",
-        Params={"Bucket": AWS_S3_BUCKET, "Key": s3_key},
+        Params=params,
         ExpiresIn=expires,
     )

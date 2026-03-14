@@ -91,20 +91,23 @@
 		return `${m}:${sec.toString().padStart(2, '0')}`;
 	}
 
-	async function downloadMp3() {
+	function downloadMp3() {
 		if (!resolvedAudioUrl) return;
-		try {
-			const resp = await fetch(resolvedAudioUrl);
-			const blob = await resp.blob();
-			const url = URL.createObjectURL(blob);
+
+		if (resolvedAudioUrl.startsWith('blob:')) {
+			// Local blob URL (from base64) — download directly
 			const a = document.createElement('a');
-			a.href = url;
+			a.href = resolvedAudioUrl;
 			a.download = 'podcast.mp3';
 			a.click();
-			URL.revokeObjectURL(url);
-		} catch {
-			// Fallback: open in new tab if fetch fails (e.g. CORS)
-			window.open(resolvedAudioUrl, '_blank');
+		} else {
+			// External URL (presigned S3) — has Content-Disposition: attachment
+			// Use hidden iframe to avoid navigating away from the page
+			const iframe = document.createElement('iframe');
+			iframe.style.display = 'none';
+			iframe.src = resolvedAudioUrl;
+			document.body.appendChild(iframe);
+			setTimeout(() => iframe.remove(), 10000);
 		}
 	}
 

@@ -35,7 +35,9 @@ async def get_report_detail(report_id: str, user: dict = Depends(get_current_use
     # Generate presigned URL for audio if available
     audio_url = None
     if item.get("audio_s3_key"):
-        audio_url = await generate_presigned_url(item["audio_s3_key"])
+        audio_url = await generate_presigned_url(
+            item["audio_s3_key"], download_filename="podcast.mp3"
+        )
 
     # Fetch statement metadata
     stmt_list = []
