@@ -154,13 +154,12 @@ class TestBuildSentenceTimestamps:
 
 class TestGetClient:
     def test_raises_without_api_key(self):
-        with patch.dict("os.environ", {}, clear=True):
-            with patch("services.elevenlabs_tts.os.getenv", return_value=None):
-                with pytest.raises(RuntimeError, match="ELEVENLABS_API_KEY not set"):
-                    _get_client()
+        with patch("services.elevenlabs_tts.ELEVENLABS_API_KEY", None):
+            with pytest.raises(RuntimeError, match="ELEVENLABS_API_KEY not set"):
+                _get_client()
 
     def test_creates_client_with_key(self):
-        with patch("services.elevenlabs_tts.os.getenv", return_value="test-key"):
+        with patch("services.elevenlabs_tts.ELEVENLABS_API_KEY", "test-key"):
             with patch("services.elevenlabs_tts.ElevenLabs") as mock_cls:
                 client = _get_client()
                 mock_cls.assert_called_once_with(api_key="test-key")
@@ -221,12 +220,12 @@ class TestGeneratePodcastAudio:
             mock_client.text_to_speech.convert_with_timestamps.return_value = mock_response
             mock_get_client.return_value = mock_client
 
-            with patch("services.elevenlabs_tts.asyncio.to_thread", side_effect=lambda fn, **kw: fn(**kw)) as mock_thread:
+            with patch("services.elevenlabs_tts.asyncio.to_thread", side_effect=lambda fn, **kw: fn(**kw)):
                 await generate_podcast_audio("Hola.", language="es")
 
-            # Check that language_code was passed
-            call_kwargs = mock_thread.call_args
-            assert call_kwargs[1].get("language_code") == "es" or True  # the thread wraps the call
+            # convert_with_timestamps is called directly by the lambda unwrapping to_thread
+            call_kwargs = mock_client.text_to_speech.convert_with_timestamps.call_args
+            assert call_kwargs[1]["language_code"] == "es"
 
     @pytest.mark.asyncio
     async def test_english_no_language_code(self):
@@ -240,9 +239,10 @@ class TestGeneratePodcastAudio:
             mock_get_client.return_value = mock_client
 
             with patch("services.elevenlabs_tts.asyncio.to_thread", side_effect=lambda fn, **kw: fn(**kw)):
-                result = await generate_podcast_audio("Hello.", language="en")
+                await generate_podcast_audio("Hello.", language="en")
 
-        assert result["audio_base64"] == "data"
+            call_kwargs = mock_client.text_to_speech.convert_with_timestamps.call_args
+            assert "language_code" not in call_kwargs[1]
 
 
 # ── Constants ────────────────────────────────────────────────────────────────

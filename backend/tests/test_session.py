@@ -1,6 +1,17 @@
 """Tests for services/session.py — Session management."""
 
+import pytest
+
 from services.session import Session, sessions
+
+
+@pytest.fixture(autouse=True)
+def _clean_sessions():
+    """Ensure any sessions added during a test are removed even if it fails."""
+    before = set(sessions.keys())
+    yield
+    for key in set(sessions.keys()) - before:
+        sessions.pop(key, None)
 
 
 class TestSession:
@@ -50,10 +61,6 @@ class TestSession:
 
         assert sessions["s1"].language == "en"
         assert sessions["s2"].language == "fr"
-
-        # Cleanup
-        sessions.pop("s1", None)
-        sessions.pop("s2", None)
 
     def test_session_equality_by_identity(self):
         s1 = Session(session_id="same")

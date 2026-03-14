@@ -42,7 +42,8 @@ export function startAnalysis(
 	onAskQuestion: (question: AgentQuestion) => void,
 	onThinking: (text: string) => void
 ): AnalysisHandle {
-	const ws = new WebSocket('ws://localhost:8000/ws/analyze');
+	const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/analyze';
+	const ws = new WebSocket(wsUrl);
 	let open = false;
 
 	ws.onopen = async () => {
@@ -87,8 +88,8 @@ export function startAnalysis(
 					onError(data.message);
 					break;
 			}
-		} catch {
-			// skip malformed messages
+		} catch (e) {
+			console.warn('Malformed WebSocket message:', e);
 		}
 	};
 

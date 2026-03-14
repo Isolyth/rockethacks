@@ -20,14 +20,21 @@
 
 	let hasAudio = $derived(!!audioBase64 && sentences.length > 0);
 
-	// Build audio blob URL from base64 (more efficient than data: URL)
-	let audioUrl = $derived.by(() => {
-		if (!audioBase64) return '';
+	// Build audio blob URL from base64, with cleanup to prevent memory leaks
+	let audioUrl = $state('');
+
+	$effect(() => {
+		if (!audioBase64) {
+			audioUrl = '';
+			return;
+		}
 		const binary = atob(audioBase64);
 		const bytes = new Uint8Array(binary.length);
 		for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 		const blob = new Blob([bytes], { type: 'audio/mpeg' });
-		return URL.createObjectURL(blob);
+		const url = URL.createObjectURL(blob);
+		audioUrl = url;
+		return () => URL.revokeObjectURL(url);
 	});
 
 	function onTimeUpdate() {
@@ -96,7 +103,7 @@
 						onclick={() => clickSentence(i)}
 						role="button"
 						tabindex="0"
-						onkeydown={(e) => e.key === 'Enter' && clickSentence(i)}
+						onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), clickSentence(i))}
 					>
 						{sentence.text}{' '}
 					</span>

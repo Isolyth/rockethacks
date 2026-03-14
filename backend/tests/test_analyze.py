@@ -105,7 +105,7 @@ def _collect_ws_messages(ws, respond_to=None):
             # Terminal events
             if data["type"] in ("podcast_audio_ready", "error"):
                 break
-    except (WebSocketDisconnect, Exception):
+    except WebSocketDisconnect:
         pass
     return messages
 

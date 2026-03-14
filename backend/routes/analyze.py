@@ -21,6 +21,10 @@ async def send_json(ws: WebSocket, data: dict):
     await ws.send_text(json.dumps(data))
 
 
+async def send_progress(ws: WebSocket, step: str, message: str, percent: int):
+    await send_json(ws, {"type": "progress", "step": step, "message": message, "percent": percent})
+
+
 def parse_file_data(name: str, content_bytes: bytes) -> str | None:
     """Parse a file's bytes into text. Returns None if unsupported type."""
     lower = name.lower()
@@ -41,7 +45,11 @@ async def ws_analyze(ws: WebSocket):
     try:
         # Step 1: Receive initial files from client
         raw = await ws.receive_text()
-        msg = json.loads(raw)
+        try:
+            msg = json.loads(raw)
+        except json.JSONDecodeError:
+            await send_json(ws, {"type": "error", "message": "Invalid message format"})
+            return
 
         if msg.get("type") != "upload_files" or not msg.get("files"):
             await send_json(ws, {"type": "error", "message": "Expected upload_files message with files"})
@@ -54,15 +62,10 @@ async def ws_analyze(ws: WebSocket):
         file_names = [f["name"] for f in files]
         logger.info(f"=== WS /ws/analyze with {len(files)} file(s): {file_names} lang={language} ===")
 
-        await send_json(ws, {
-            "type": "progress",
-            "step": "parsing",
-            "message": "Extracting text from uploaded files...",
-            "percent": 10,
-        })
+        await send_progress(ws, "parsing", "Extracting text from uploaded files...", 10)
 
         # Parse all files
-        all_text = ""
+        text_parts = []
         for f in files:
             name = f["name"]
             content_bytes = base64.b64decode(f["content"])
@@ -77,24 +80,15 @@ async def ws_analyze(ws: WebSocket):
                 return
 
             logger.info(f"  Parsed: {len(text)} chars extracted")
-            all_text += f"\n--- {name} ---\n{text}"
+            text_parts.append(f"\n--- {name} ---\n{text}")
 
-        logger.info(f"[1/4] Parsing done. Total text: {len(all_text)} chars ({time.time() - t0:.1f}s)")
-        await send_json(ws, {
-            "type": "progress",
-            "step": "parsing",
-            "message": "Files parsed successfully",
-            "percent": 25,
-        })
+        all_text = "".join(text_parts)
+        logger.info(f"[1/5] Parsing done. Total text: {len(all_text)} chars ({time.time() - t0:.1f}s)")
+        await send_progress(ws, "parsing", "Files parsed successfully", 25)
 
         # Step 2: Agentic Gemini analysis
-        logger.info("[2/4] Starting agentic Gemini analysis...")
-        await send_json(ws, {
-            "type": "progress",
-            "step": "analyzing",
-            "message": "AI is analyzing your spending...",
-            "percent": 40,
-        })
+        logger.info("[2/5] Starting agentic Gemini analysis...")
+        await send_progress(ws, "analyzing", "AI is analyzing your spending...", 40)
 
         t1 = time.time()
         report_data = None
@@ -118,29 +112,28 @@ async def ws_analyze(ws: WebSocket):
 
                 # Wait for client response
                 raw_resp = await ws.receive_text()
-                resp_msg = json.loads(raw_resp)
+                try:
+                    resp_msg = json.loads(raw_resp)
+                except json.JSONDecodeError:
+                    await send_json(ws, {"type": "error", "message": "Invalid message format"})
+                    return
 
                 if resp_msg.get("type") == "upload_files" and resp_msg.get("files"):
-                    new_text = ""
+                    new_parts = []
                     for f in resp_msg["files"]:
                         name = f["name"]
                         content_bytes = base64.b64decode(f["content"])
                         text = parse_file_data(name, content_bytes)
                         if text:
-                            new_text += f"\n--- {name} ---\n{text}"
+                            new_parts.append(f"\n--- {name} ---\n{text}")
                             logger.info(f"  Additional file: {name} ({len(text)} chars)")
 
-                    session.user_response = {"action": "upload", "document_text": new_text}
+                    session.user_response = {"action": "upload", "document_text": "".join(new_parts)}
                 else:
                     logger.info("  User skipped document request")
                     session.user_response = {"action": "skip"}
 
-                await send_json(ws, {
-                    "type": "progress",
-                    "step": "analyzing",
-                    "message": "Continuing analysis...",
-                    "percent": 55,
-                })
+                await send_progress(ws, "analyzing", "Continuing analysis...", 55)
 
             elif event_type == "ask_question":
                 logger.info(f"  Agent asking: {event_data['question']}")
@@ -152,18 +145,17 @@ async def ws_analyze(ws: WebSocket):
 
                 # Wait for client answer
                 raw_resp = await ws.receive_text()
-                resp_msg = json.loads(raw_resp)
+                try:
+                    resp_msg = json.loads(raw_resp)
+                except json.JSONDecodeError:
+                    await send_json(ws, {"type": "error", "message": "Invalid message format"})
+                    return
 
                 answer = resp_msg.get("answer", "No answer provided")
                 logger.info(f"  User answered: {answer}")
                 session.user_response = {"answer": answer}
 
-                await send_json(ws, {
-                    "type": "progress",
-                    "step": "analyzing",
-                    "message": "Continuing analysis...",
-                    "percent": 55,
-                })
+                await send_progress(ws, "analyzing", "Continuing analysis...", 55)
 
             elif event_type == "result":
                 report_data = event_data
@@ -181,15 +173,10 @@ async def ws_analyze(ws: WebSocket):
         report = FinancialReport(**report_data)
         logger.info(f"  Report: {len(report.categories)} categories, {len(report.insights)} insights")
 
-        await send_json(ws, {
-            "type": "progress",
-            "step": "analyzing",
-            "message": "Financial report generated",
-            "percent": 50,
-        })
+        await send_progress(ws, "analyzing", "Financial report generated", 50)
 
         # Send report immediately so frontend can display it
-        logger.info("[2/5] Sending report to client")
+        logger.info("[3/5] Sending report to client")
         await send_json(ws, {
             "type": "report_ready",
             "report": report.model_dump(),
@@ -197,44 +184,23 @@ async def ws_analyze(ws: WebSocket):
 
         # Step 3: Podcast script
         logger.info("[3/5] Generating podcast script...")
-        await send_json(ws, {
-            "type": "progress",
-            "step": "generating",
-            "message": "Creating your podcast script...",
-            "percent": 60,
-        })
+        await send_progress(ws, "generating", "Creating your podcast script...", 60)
 
         t2 = time.time()
         podcast_script = await generate_podcast_script(report_data, language=language)
         logger.info(f"[3/5] Podcast script done ({time.time() - t2:.1f}s, {len(podcast_script)} chars)")
-
-        await send_json(ws, {
-            "type": "progress",
-            "step": "generating",
-            "message": "Podcast script complete!",
-            "percent": 70,
-        })
+        await send_progress(ws, "generating", "Podcast script complete!", 70)
 
         # Step 4: Generate TTS audio with ElevenLabs
         logger.info("[4/5] Generating podcast audio...")
-        await send_json(ws, {
-            "type": "progress",
-            "step": "narrating",
-            "message": "Generating audio narration...",
-            "percent": 80,
-        })
+        await send_progress(ws, "narrating", "Generating audio narration...", 80)
 
         t3 = time.time()
         try:
             audio_result = await generate_podcast_audio(podcast_script, language=language)
             logger.info(f"[4/5] Audio done ({time.time() - t3:.1f}s, {len(audio_result['sentences'])} sentences)")
 
-            await send_json(ws, {
-                "type": "progress",
-                "step": "narrating",
-                "message": "Audio narration complete!",
-                "percent": 95,
-            })
+            await send_progress(ws, "narrating", "Audio narration complete!", 95)
 
             # Step 5: Send podcast audio
             logger.info(f"[5/5] Sending result. Total time: {time.time() - t0:.1f}s")
@@ -246,12 +212,7 @@ async def ws_analyze(ws: WebSocket):
             })
         except Exception as e:
             logger.error(f"[4/5] ElevenLabs TTS failed: {e}", exc_info=True)
-            await send_json(ws, {
-                "type": "progress",
-                "step": "narrating",
-                "message": "Audio generation failed — showing script only",
-                "percent": 95,
-            })
+            await send_progress(ws, "narrating", "Audio generation failed — showing script only", 95)
             # Fallback: send script without audio
             await send_json(ws, {
                 "type": "podcast_audio_ready",

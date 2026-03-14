@@ -1,23 +1,18 @@
 import asyncio
 import json
 import logging
-import os
 
-from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
+from config import GEMINI_API_KEY, GEMINI_MODEL, MAX_DOCUMENT_REQUESTS
 from services.session import Session
-
-load_dotenv()
 
 logger = logging.getLogger("uvicorn.error")
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+client = genai.Client(api_key=GEMINI_API_KEY)
 
-MODEL = "gemini-flash-latest"
-
-MAX_DOCUMENT_REQUESTS = int(os.getenv("MAX_DOCUMENT_REQUESTS", "3"))
+MODEL = GEMINI_MODEL
 
 MULTI_DOC_REMINDER = """
 IMPORTANT: You are receiving $file_count separate bank statement documents. They are separated by "--- filename ---" markers. Treat them as one combined financial picture — merge all transactions together when calculating totals, categories, and trends. Do not analyze them separately.
@@ -264,33 +259,6 @@ AGENT_TOOLS = [types.Tool(function_declarations=[
 ])]
 
 
-async def _stream_and_collect(contents, config):
-    """Stream a Gemini response, yielding thinking chunks, and return the full response."""
-    collected_parts = []
-    response_content = None
-
-    for chunk in client.models.generate_content_stream(
-        model=MODEL,
-        contents=contents,
-        config=config,
-    ):
-        if not chunk.candidates:
-            continue
-        for part in chunk.candidates[0].content.parts:
-            if getattr(part, "thought", False) and part.text:
-                yield ("thinking", part.text)
-            elif part.function_call:
-                collected_parts.append(part)
-            elif part.text:
-                collected_parts.append(part)
-        response_content = chunk.candidates[0].content
-
-    # Yield the final collected response so caller can process tool calls
-    if response_content:
-        yield ("_response", response_content)
-    elif collected_parts:
-        yield ("_response", types.Content(role="model", parts=collected_parts))
-
 
 def _language_instruction(language: str) -> str:
     """Build a language instruction string for prompts."""
@@ -394,6 +362,84 @@ async def _do_grounded_search(query: str) -> tuple[str, object | None]:
         return f"Search failed: {e}", None
 
 
+async def _handle_search_web(query, contents, response_content,
+                             all_grounding_sources, all_grounding_citations,
+                             search_entry_point_html):
+    """Perform a grounded search, accumulate grounding data, and append to contents."""
+    search_result, grounding_meta = await _do_grounded_search(query)
+
+    if grounding_meta:
+        gd = _extract_grounding_data(grounding_meta)
+        if gd:
+            offset = len(all_grounding_sources)
+            all_grounding_sources.extend(gd["sources"])
+            for citation in gd["citations"]:
+                citation["source_indices"] = [i + offset for i in citation["source_indices"]]
+            all_grounding_citations.extend(gd["citations"])
+            if gd["search_entry_point_html"]:
+                search_entry_point_html = gd["search_entry_point_html"]
+
+    func_response = types.Part.from_function_response(
+        name="search_web",
+        response={"result": search_result},
+    )
+    contents.append(response_content)
+    contents.append(types.Content(role="user", parts=[func_response]))
+    return search_entry_point_html
+
+
+def _build_interaction_event(fc):
+    """Return the appropriate event tuple for a request_documents or ask_question tool call."""
+    if fc.name == "request_documents":
+        return ("request_documents", {
+            "document_type": fc.args["document_type"],
+            "reason": fc.args["reason"],
+        })
+    return ("ask_question", {
+        "question": fc.args["question"],
+        "options": fc.args.get("options", []),
+    })
+
+
+def _handle_interaction_response(fc, session, contents, response_content,
+                                  interaction_count, max_requests):
+    """Process user response for request_documents or ask_question and append to contents."""
+    user_response = session.user_response
+    session.user_response = None
+
+    if fc.name == "request_documents":
+        logger.info(f"  Agent requesting document: {fc.args['document_type']} (interaction {interaction_count}/{max_requests})")
+        if user_response and user_response.get("action") == "upload":
+            additional_text = user_response.get("document_text", "")
+            func_response = types.Part.from_function_response(
+                name="request_documents",
+                response={"result": f"User provided additional document:\n{additional_text}"},
+            )
+        else:
+            func_response = types.Part.from_function_response(
+                name="request_documents",
+                response={"result": "User declined to provide this document. Proceed with available data."},
+            )
+    else:
+        answer = (user_response or {}).get("answer", "No answer provided")
+        logger.info(f"  Agent asking question: {fc.args['question']} (interaction {interaction_count}/{max_requests})")
+        func_response = types.Part.from_function_response(
+            name="ask_question",
+            response={"result": f"User answered: {answer}"},
+        )
+
+    contents.append(response_content)
+    contents.append(types.Content(role="user", parts=[func_response]))
+
+    if interaction_count >= max_requests:
+        contents.append(
+            types.Content(
+                role="user",
+                parts=[types.Part.from_text(text="You have used all your interaction requests. Please call finish now with the best report you can produce from the available data.")],
+            )
+        )
+
+
 async def analyze_with_gemini_agent(
     statement_text: str,
     file_count: int,
@@ -482,97 +528,20 @@ async def analyze_with_gemini_agent(
                 logger.info(f"  Agent searching web: {query}")
                 yield ("thinking", f"Searching the web: {query}")
 
-                # Make a separate Gemini call with GoogleSearch grounding.
-                # This is needed because google_search tool cannot be combined
-                # with function_declarations in the same request.
-                search_result, grounding_meta = await _do_grounded_search(query)
-
-                if grounding_meta:
-                    gd = _extract_grounding_data(grounding_meta)
-                    if gd:
-                        offset = len(all_grounding_sources)
-                        all_grounding_sources.extend(gd["sources"])
-                        for citation in gd["citations"]:
-                            citation["source_indices"] = [i + offset for i in citation["source_indices"]]
-                        all_grounding_citations.extend(gd["citations"])
-                        if gd["search_entry_point_html"]:
-                            search_entry_point_html = gd["search_entry_point_html"]
-
-                func_response = types.Part.from_function_response(
-                    name="search_web",
-                    response={"result": search_result},
+                search_entry_point_html = await _handle_search_web(
+                    query, contents, response_content,
+                    all_grounding_sources, all_grounding_citations, search_entry_point_html,
                 )
-                contents.append(response_content)
-                contents.append(types.Content(role="user", parts=[func_response]))
                 break
 
-            elif fc.name == "request_documents":
+            elif fc.name in ("request_documents", "ask_question"):
                 interaction_count += 1
-                doc_type = fc.args["document_type"]
-                reason = fc.args["reason"]
-                logger.info(f"  Agent requesting document: {doc_type} (interaction {interaction_count}/{max_requests})")
-
-                # Yield pauses this generator. The route handler will set
-                # session.user_response before resuming us (by requesting
-                # the next item from the generator).
-                yield ("request_documents", {"document_type": doc_type, "reason": reason})
-
-                user_response = session.user_response
-                session.user_response = None
-
-                if user_response and user_response.get("action") == "upload":
-                    additional_text = user_response.get("document_text", "")
-                    func_response = types.Part.from_function_response(
-                        name="request_documents",
-                        response={"result": f"User provided additional document:\n{additional_text}"},
-                    )
-                else:
-                    func_response = types.Part.from_function_response(
-                        name="request_documents",
-                        response={"result": "User declined to provide this document. Proceed with available data."},
-                    )
-
-                contents.append(response_content)
-                contents.append(types.Content(role="user", parts=[func_response]))
-
-                if interaction_count >= max_requests:
-                    contents.append(
-                        types.Content(
-                            role="user",
-                            parts=[types.Part.from_text(text="You have used all your interaction requests. Please call finish now with the best report you can produce from the available data.")],
-                        )
-                    )
-                break
-
-            elif fc.name == "ask_question":
-                interaction_count += 1
-                question = fc.args["question"]
-                options = fc.args.get("options", [])
-                logger.info(f"  Agent asking question: {question} (interaction {interaction_count}/{max_requests})")
-
-                # Same pattern: yield pauses, route handler sets
-                # session.user_response before resuming.
-                yield ("ask_question", {"question": question, "options": options})
-
-                user_response = session.user_response
-                session.user_response = None
-
-                answer = (user_response or {}).get("answer", "No answer provided")
-                func_response = types.Part.from_function_response(
-                    name="ask_question",
-                    response={"result": f"User answered: {answer}"},
+                event = _build_interaction_event(fc)
+                yield event
+                _handle_interaction_response(
+                    fc, session, contents, response_content,
+                    interaction_count, max_requests,
                 )
-
-                contents.append(response_content)
-                contents.append(types.Content(role="user", parts=[func_response]))
-
-                if interaction_count >= max_requests:
-                    contents.append(
-                        types.Content(
-                            role="user",
-                            parts=[types.Part.from_text(text="You have used all your interaction requests. Please call finish now with the best report you can produce from the available data.")],
-                        )
-                    )
                 break
 
     yield ("error", "Agent exceeded maximum iterations")
@@ -580,10 +549,10 @@ async def analyze_with_gemini_agent(
 
 async def _stream_via_thread(contents, config):
     """Run the synchronous streaming generator in a thread and yield events."""
-    import queue
     import threading
 
-    q = queue.Queue()
+    loop = asyncio.get_event_loop()
+    q = asyncio.Queue()
 
     def _run():
         try:
@@ -597,31 +566,23 @@ async def _stream_via_thread(contents, config):
                     continue
                 for part in chunk.candidates[0].content.parts:
                     if getattr(part, "thought", False) and part.text:
-                        q.put(("thinking", part.text))
+                        loop.call_soon_threadsafe(q.put_nowait, ("thinking", part.text))
                     else:
                         # Accumulate non-thought parts (function calls, text)
                         # so they aren't lost when later chunks only have thoughts
                         collected_parts.append(part)
-            q.put(("_collected_parts", collected_parts))
+            loop.call_soon_threadsafe(q.put_nowait, ("_collected_parts", collected_parts))
         except Exception as e:
-            q.put(("_error", str(e)))
+            loop.call_soon_threadsafe(q.put_nowait, ("_error", str(e)))
         finally:
-            q.put(None)  # sentinel
+            loop.call_soon_threadsafe(q.put_nowait, None)  # sentinel
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
 
     collected_parts = []
     while True:
-        # Poll queue without blocking the event loop
-        while True:
-            try:
-                item = q.get_nowait()
-                break
-            except queue.Empty:
-                await asyncio.sleep(0.05)
-                continue
-
+        item = await q.get()
         if item is None:
             break
         event_type, event_data = item
