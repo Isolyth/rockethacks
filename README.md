@@ -1,4 +1,4 @@
-# Easy monAI
+# Easy MonAI
 
 A full-stack financial analysis app that uses Google's Gemini AI to analyze bank statements (PDF/CSV) and generate financial reports and podcast scripts.
 

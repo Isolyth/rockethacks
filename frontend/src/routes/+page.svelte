@@ -108,12 +108,12 @@
 </script>
 
 <svelte:head>
-	<title>Easy monAI - Bank Statement Analyzer</title>
+	<title>Easy MonAI - Bank Statement Analyzer</title>
 </svelte:head>
 
 <header class="app-header">
 	<div class="header-content">
-		<div class="logo">StatementPod</div>
+		<div class="logo">Easy MonAI</div>
 		<div class="user-status">
 			{#if userState === 'unauthenticated'}
 				<button class="login-btn-small" onclick={() => userState = 'authenticated'}>Login</button>
@@ -130,7 +130,7 @@
 	<div class="content">
 		{#if userState === 'unauthenticated'}
 			<div class="hero">
-				<h1>StatementPod</h1>
+				<h1>Easy MonAI</h1>
 				<p class="tagline">Your financial life, analyzed and narrated by AI</p>
 				<div class="hero-actions">
 					<button class="primary-btn" onclick={() => userState = 'authenticated'}>Log In / Sign Up</button>

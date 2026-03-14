@@ -1,4 +1,4 @@
-# Easy monAI
+# Easy MonAI
 
 AI-powered financial analysis app that parses bank statements (PDF/CSV) and generates reports + podcast narration.
 

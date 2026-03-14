@@ -2,7 +2,7 @@
 
 ## Overview
 
-Easy monAI is a two-tier application with a SvelteKit frontend and a FastAPI backend communicating over a single WebSocket connection.
+Easy MonAI is a two-tier application with a SvelteKit frontend and a FastAPI backend communicating over a single WebSocket connection.
 
 ```
 ┌──────────────┐    WebSocket     ┌──────────────┐
