@@ -14,6 +14,7 @@
 
 	let activeChart = $state<"bar" | "doughnut" | "heatmap">("bar");
 	let hoveredDay = $state<{ date: string; total: number; x: number; y: number } | null>(null);
+	let heatmapMonthIndex = $state(0);
 
 	function formatCurrency(n: number): string {
 		return new Intl.NumberFormat("en-US", {
@@ -295,44 +296,63 @@
 		<!-- Heatmap -->
 		{:else if activeChart === "heatmap"}
 			{#if dailySpending && dailySpending.length > 0}
+				{@const hm = heatmapData()}
+				{@const month = hm.months[heatmapMonthIndex] ?? hm.months[0]}
+				{@const hasPrev = heatmapMonthIndex > 0}
+				{@const hasNext = heatmapMonthIndex < hm.months.length - 1}
 				<div class="heatmap-container" role="img" aria-label="Daily spending heatmap">
-					{#each heatmapData().months as month}
-						<div class="heatmap-month">
-							<h4 class="month-label">{month.label}</h4>
-							<div class="heatmap-day-labels">
-								{#each heatmapData().dayLabels as label}
-									<span class="day-label">{label}</span>
+					<div class="heatmap-nav">
+						{#if hasPrev}
+							<button
+								class="heatmap-arrow"
+								type="button"
+								onclick={() => { heatmapMonthIndex--; hoveredDay = null; }}
+								aria-label="Previous month"
+							>&#8592;</button>
+						{:else}
+							<div class="heatmap-arrow-spacer"></div>
+						{/if}
+						<h4 class="month-label">{month.label}</h4>
+						{#if hasNext}
+							<button
+								class="heatmap-arrow"
+								type="button"
+								onclick={() => { heatmapMonthIndex++; hoveredDay = null; }}
+								aria-label="Next month"
+							>&#8594;</button>
+						{:else}
+							<div class="heatmap-arrow-spacer"></div>
+						{/if}
+					</div>
+					<div class="heatmap-day-labels">
+						{#each hm.dayLabels as label}
+							<span class="day-label">{label}</span>
+						{/each}
+					</div>
+					<div class="heatmap-grid">
+						{#each month.weeks as week}
+							<div class="heatmap-week">
+								{#each week as day}
+									{#if day.day === 0}
+										<div class="heatmap-cell empty"></div>
+									{:else}
+										<div
+											class="heatmap-cell"
+											class:out-of-range={!day.inRange}
+											style="background: {day.inRange
+												? heatmapColor(day.total, hm.maxTotal)
+												: 'rgba(67, 97, 238, 0.04)'}"
+											onmouseenter={(e) => handleDayHover(e, day)}
+											onmouseleave={() => (hoveredDay = null)}
+											role="presentation"
+										>
+											<span class="cell-date">{day.day}</span>
+										</div>
+									{/if}
 								{/each}
 							</div>
-							<div class="heatmap-grid">
-								{#each month.weeks as week}
-									<div class="heatmap-week">
-										{#each week as day}
-											{#if day.day === 0}
-												<div class="heatmap-cell empty"></div>
-											{:else}
-												<div
-													class="heatmap-cell"
-													class:out-of-range={!day.inRange}
-													style="background: {day.inRange
-														? heatmapColor(
-																day.total,
-																heatmapData().maxTotal,
-															)
-														: 'rgba(67, 97, 238, 0.04)'}"
-													onmouseenter={(e) => handleDayHover(e, day)}
-													onmouseleave={() => (hoveredDay = null)}
-													role="presentation"
-												>
-													<span class="cell-date">{day.day}</span>
-												</div>
-											{/if}
-										{/each}
-									</div>
-								{/each}
-							</div>
-						</div>
-					{/each}
+						{/each}
+					</div>
 					{#if hoveredDay}
 						<div
 							class="heatmap-tooltip"
@@ -351,8 +371,8 @@
 								<div
 									class="legend-cell"
 									style="background: {heatmapColor(
-										intensity * (heatmapData().maxTotal || 1),
-										heatmapData().maxTotal || 1,
+										intensity * (hm.maxTotal || 1),
+										hm.maxTotal || 1,
 									)}"
 								></div>
 							{/each}
@@ -674,20 +694,52 @@
 		animation: fadeIn 0.4s ease both;
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
-	}
-
-	.heatmap-month {
-		display: flex;
-		flex-direction: column;
 		gap: 0;
 	}
 
-	.month-label {
-		font-size: 0.8rem;
-		font-weight: 600;
+	.heatmap-nav {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 1rem;
+		margin-bottom: 0.5rem;
+	}
+
+	.heatmap-arrow {
+		background: transparent;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
 		color: var(--color-text-muted);
-		margin-bottom: 0.35rem;
+		font-size: 1rem;
+		width: 28px;
+		height: 28px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		transition: all 0.15s ease;
+		padding: 0;
+		line-height: 1;
+	}
+
+	.heatmap-arrow:hover {
+		color: var(--color-text);
+		border-color: var(--color-accent);
+		background: var(--color-surface-2);
+	}
+
+	.heatmap-arrow-spacer {
+		width: 28px;
+		height: 28px;
+	}
+
+	.month-label {
+		font-size: 0.9rem;
+		font-weight: 600;
+		color: var(--color-text);
+		margin: 0;
+		min-width: 100px;
+		text-align: center;
 	}
 
 	.heatmap-day-labels {
