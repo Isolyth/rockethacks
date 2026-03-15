@@ -15,6 +15,7 @@
 	let activeChart = $state<"bar" | "doughnut" | "heatmap">("bar");
 	let hoveredDay = $state<{ date: string; total: number; x: number; y: number } | null>(null);
 	let heatmapMonthIndex = $state(0);
+	let hoveredSegment = $state<number | null>(null);
 
 	function formatCurrency(n: number): string {
 		return new Intl.NumberFormat("en-US", {
@@ -52,6 +53,11 @@
 		if (segs.length === 0) return [];
 		let cumulative = 0;
 		return segs.map((seg, i) => {
+			const startAngle = (cumulative / 100) * 360;
+			const sweepAngle = (seg.percentage / 100) * 360;
+			const midAngle = startAngle + sweepAngle / 2;
+			// Convert to radians, offset -90 because SVG starts at top
+			const midRad = ((midAngle - 90) * Math.PI) / 180;
 			const dashLength = (seg.percentage / 100) * DONUT_CIRCUMFERENCE;
 			const dashGap = DONUT_CIRCUMFERENCE - dashLength;
 			const offset = -(cumulative / 100) * DONUT_CIRCUMFERENCE;
@@ -61,6 +67,9 @@
 				color: categoryColors[i % categoryColors.length],
 				dashArray: `${dashLength} ${dashGap}`,
 				dashOffset: offset,
+				// Pop-out direction (unit vector from center)
+				popX: Math.cos(midRad),
+				popY: Math.sin(midRad),
 			};
 		});
 	});
@@ -247,31 +256,45 @@
 		{:else if activeChart === "doughnut"}
 			{#if pieSegments && pieSegments.length > 0}
 				<div class="doughnut-container">
-					<svg viewBox="0 0 200 200" class="doughnut-svg">
-						{#each donutSegments() as seg}
+					<svg viewBox="-10 -10 220 220" class="doughnut-svg">
+						{#each donutSegments() as seg, i}
+							{@const isHovered = hoveredSegment === i}
+							{@const tx = isHovered ? seg.popX * 8 : 0}
+							{@const ty = isHovered ? seg.popY * 8 : 0}
 							<circle
 								cx="100"
 								cy="100"
 								r={DONUT_RADIUS}
 								fill="none"
 								stroke={seg.color}
-								stroke-width="24"
+								stroke-width={isHovered ? 30 : 24}
 								stroke-dasharray={seg.dashArray}
 								stroke-dashoffset={seg.dashOffset}
 								stroke-linecap="butt"
-								transform="rotate(-90 100 100)"
+								transform="rotate(-90 100 100) translate({tx} {ty})"
+								class="donut-segment"
+								role="img"
+								aria-label="{seg.name}: {seg.percentage.toFixed(1)}%"
+								onmouseenter={() => (hoveredSegment = i)}
+								onmouseleave={() => (hoveredSegment = null)}
 							/>
 						{/each}
 						<text x="100" y="96" text-anchor="middle" class="donut-total">
-							{formatCompact(report.summary.total_expenses)}
+							{hoveredSegment !== null ? formatCompact(donutSegments()[hoveredSegment].total) : formatCompact(report.summary.total_expenses)}
 						</text>
 						<text x="100" y="114" text-anchor="middle" class="donut-label">
-							total spent
+							{hoveredSegment !== null ? donutSegments()[hoveredSegment].name : 'total spent'}
 						</text>
 					</svg>
 					<div class="doughnut-legend">
 						{#each donutSegments() as seg, i}
-							<div class="legend-item">
+							<div
+								class="legend-item"
+								class:legend-item-active={hoveredSegment === i}
+								role="listitem"
+								onmouseenter={() => (hoveredSegment = i)}
+								onmouseleave={() => (hoveredSegment = null)}
+							>
 								<span
 									class="legend-dot"
 									style="background: {seg.color}"
@@ -646,10 +669,16 @@
 		height: 200px;
 	}
 
+	.donut-segment {
+		cursor: pointer;
+		transition: stroke-width 0.2s ease, transform 0.2s ease;
+	}
+
 	.donut-total {
 		fill: var(--color-text);
 		font-size: 18px;
 		font-weight: 700;
+		transition: all 0.15s ease;
 	}
 
 	.donut-label {
@@ -657,6 +686,7 @@
 		font-size: 10px;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
+		transition: all 0.15s ease;
 	}
 
 	.doughnut-legend {
@@ -671,6 +701,15 @@
 		align-items: center;
 		gap: 0.4rem;
 		font-size: 0.8rem;
+		cursor: pointer;
+		padding: 0.2rem 0.4rem;
+		border-radius: 4px;
+		transition: background 0.15s ease;
+	}
+
+	.legend-item:hover,
+	.legend-item-active {
+		background: var(--color-surface-2);
 	}
 
 	.legend-dot {
