@@ -30,6 +30,17 @@ export interface MonthlyTrend {
 	expenses: number;
 }
 
+export interface PieSegment {
+	name: string;
+	total: number;
+	percentage: number;
+}
+
+export interface DailySpending {
+	date: string;
+	total: number;
+}
+
 export interface GroundingSource {
 	uri: string;
 	title: string | null;
@@ -54,6 +65,8 @@ export interface FinancialReport {
 	insights: string[];
 	monthly_trend: MonthlyTrend[];
 	grounding?: GroundingData | null;
+	pie_segments?: PieSegment[];
+	daily_spending?: DailySpending[];
 }
 
 export interface AnalysisResult {

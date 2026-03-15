@@ -17,13 +17,17 @@
 		FinancialReport,
 		PodcastAudio,
 		DocumentRequest,
-		AgentQuestion
+		AgentQuestion,
+		PieSegment,
+		DailySpending
 	} from '$lib/types';
 
 	let appState = $state<AppState>('idle');
 	let progress = $state<ProgressEvent>({ step: 'parsing', message: '', percent: 0 });
 	let report = $state<FinancialReport | null>(null);
 	let podcastAudio = $state<PodcastAudio | null>(null);
+	let pieSegments = $state<PieSegment[] | null>(null);
+	let dailySpending = $state<DailySpending[] | null>(null);
 	let errorMessage = $state('');
 	let documentRequest = $state<DocumentRequest | null>(null);
 	let agentQuestion = $state<AgentQuestion | null>(null);
@@ -65,6 +69,8 @@
 		report = null;
 		podcastAudio = null;
 		savedReportId = null;
+		pieSegments = null;
+		dailySpending = null;
 
 		analysisHandle = startAnalysis({
 			files,
@@ -108,6 +114,12 @@
 			},
 			onThinking: (text) => {
 				thinkingText = text;
+			},
+			onPieChartReady: (segs) => {
+				pieSegments = segs;
+			},
+			onHeatmapReady: (data) => {
+				dailySpending = data;
 			}
 		});
 	}
@@ -136,6 +148,8 @@
 		appState = 'idle';
 		report = null;
 		podcastAudio = null;
+		pieSegments = null;
+		dailySpending = null;
 		errorMessage = '';
 		documentRequest = null;
 		agentQuestion = null;
@@ -206,7 +220,7 @@
 			{#if report}
 				<div class="results-grid">
 					<div class="results-col results-col--left">
-						<Report {report} />
+						<Report {report} {pieSegments} {dailySpending} />
 					</div>
 					<div class="results-col results-col--right">
 						{#if stillProcessing}

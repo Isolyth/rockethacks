@@ -336,10 +336,12 @@ async def ws_analyze(ws: WebSocket):
 
         t1 = time.time()
         report_data = None
-        
+        pie_segments = None
+        daily_spending = None
+
         # Generator wrapper to enforce total processing timeout
         async def run_analysis_stream():
-            nonlocal report_data
+            nonlocal report_data, pie_segments, daily_spending
             async for event_type, event_data in analyze_with_gemini_agent(
                 all_text, file_count=file_count, session=session, language=language
             ):
@@ -419,9 +421,23 @@ async def ws_analyze(ws: WebSocket):
 
                     await send_progress(ws, "analyzing", "Continuing analysis...", 55)
 
-                elif event_type == "result":
+                elif event_type == "report_ready":
                     report_data = event_data
-                    logger.info(f"[2/5] Gemini analysis done ({time.time() - t1:.1f}s)")
+                    logger.info(f"  Agent submitted report ({time.time() - t1:.1f}s)")
+                    # Send report immediately so frontend can show bar chart
+                    await send_json(ws, {"type": "report_ready", "report": event_data})
+                    await send_progress(ws, "analyzing", "Generating chart data...", 55)
+
+                elif event_type == "pie_chart_ready":
+                    pie_segments = event_data.get("segments", [])
+                    logger.info(f"  Agent submitted pie data ({len(pie_segments)} segments)")
+                    await send_json(ws, {"type": "chart_pie_ready", "segments": pie_segments})
+                    await send_progress(ws, "analyzing", "Generating heatmap...", 60)
+
+                elif event_type == "heatmap_ready":
+                    daily_spending = event_data.get("daily_spending", [])
+                    logger.info(f"[2/5] Gemini analysis done ({time.time() - t1:.1f}s, {len(daily_spending)} days)")
+                    await send_json(ws, {"type": "chart_heatmap_ready", "daily_spending": daily_spending})
 
                 elif event_type == "error":
                     await send_json(ws, {"type": "error", "message": event_data})
@@ -441,18 +457,16 @@ async def ws_analyze(ws: WebSocket):
             await send_json(ws, {"type": "error", "message": "Analysis failed to produce a report"})
             return
 
+        # Merge chart data into report for validation and persistence
+        if pie_segments:
+            report_data["pie_segments"] = pie_segments
+        if daily_spending:
+            report_data["daily_spending"] = daily_spending
+
         # Validate report
         report = FinancialReport(**report_data)
         logger.info(f"  Report: {len(report.categories)} categories, {len(report.insights)} insights")
-
         await send_progress(ws, "analyzing", "Financial report generated", 50)
-
-        # Send report immediately so frontend can display it
-        logger.info("[3/5] Sending report to client")
-        await send_json(ws, {
-            "type": "report_ready",
-            "report": report.model_dump(),
-        })
 
         # Step 3: Podcast script
         logger.info("[3/5] Generating podcast script...")

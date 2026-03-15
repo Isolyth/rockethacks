@@ -8,7 +8,9 @@ import type {
 	UserResponse,
 	ReportSummaryItem,
 	ReportDetail,
-	StatementItem
+	StatementItem,
+	PieSegment,
+	DailySpending
 } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -186,6 +188,8 @@ interface AnalysisOptions {
 	onDocumentRequest: (request: DocumentRequest) => void;
 	onAskQuestion: (question: AgentQuestion) => void;
 	onThinking: (text: string) => void;
+	onPieChartReady?: (segments: PieSegment[]) => void;
+	onHeatmapReady?: (data: DailySpending[]) => void;
 }
 
 export function startAnalysis(opts: AnalysisOptions): AnalysisHandle {
@@ -248,6 +252,12 @@ export function startAnalysis(opts: AnalysisOptions): AnalysisHandle {
 					break;
 				case 'report_ready':
 					opts.onReportReady(data.report);
+					break;
+				case 'chart_pie_ready':
+					opts.onPieChartReady?.(data.segments);
+					break;
+				case 'chart_heatmap_ready':
+					opts.onHeatmapReady?.(data.daily_spending);
 					break;
 				case 'podcast_audio_ready':
 					opts.onPodcastAudioReady(data);

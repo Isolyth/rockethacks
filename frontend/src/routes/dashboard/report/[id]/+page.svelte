@@ -66,7 +66,11 @@
 
 		<div class="results-grid">
 			<div class="results-col">
-				<Report report={reportData.report} />
+				<Report
+					report={reportData.report}
+					pieSegments={reportData.report.pie_segments ?? null}
+					dailySpending={reportData.report.daily_spending ?? null}
+				/>
 			</div>
 			<div class="results-col">
 				<PodcastPlayer

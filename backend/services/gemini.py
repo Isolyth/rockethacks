@@ -50,13 +50,19 @@ $language_instruction
    - Get context about their situation (e.g., "Do you have other bank accounts not included here?")
    - Clarify income patterns (e.g., "Are you salaried, freelance, or a mix?")
 
-3. **finish** — Use this when you have enough data and context to produce a comprehensive report. Call this with the complete financial report JSON.
+3. **search_web** — Search the web for current financial data, benchmark comparisons, average spending statistics, or relevant context. Use this to ground your insights in real data — for example, comparing the user's savings rate to the national average, or referencing current interest rates. Provide a specific search query.
 
-4. **search_web** — Search the web for current financial data, benchmark comparisons, average spending statistics, or relevant context. Use this to ground your insights in real data — for example, comparing the user's savings rate to the national average, or referencing current interest rates. Provide a specific search query.
+When you are ready to finalize your analysis, you MUST call these three tools IN ORDER:
+
+4. **submit_report** — Call this FIRST. Submit the full financial report with category breakdown (for the bar chart). Provide the complete report object.
+
+5. **submit_pie_data** — Call this SECOND, after submit_report. Submit income allocation segments for a doughnut chart. Group spending into high-level buckets showing how income is distributed (e.g., Essentials, Lifestyle, Savings, Financial/Debt). Each segment should have a name, total amount, and percentage of total income.
+
+6. **submit_heatmap_data** — Call this THIRD, after submit_pie_data. Submit daily spending totals for a calendar heatmap. Provide one entry per day in the statement date range with the date (YYYY-MM-DD) and total spending that day.
 
 ## Report format
 
-When calling finish, provide a report object with this exact structure:
+When calling submit_report, provide a report object with this exact structure:
 {
   "summary": {
     "total_income": <number>,
@@ -79,10 +85,11 @@ When calling finish, provide a report object with this exact structure:
 Categories should include things like: Food & Dining, Transportation, Shopping, Entertainment, Bills & Utilities, Healthcare, Subscriptions, Transfers, Income, etc.
 
 ## Guidelines
-- You MUST call ask_question or request_documents at least TWICE before calling finish. Never go straight to finish.
+- You MUST call ask_question or request_documents at least TWICE before calling submit_report. Never go straight to submit_report.
 - On your FIRST turn, always ask a question to understand the user's goals or clarify something about the data.
 - On your SECOND turn, either ask another question or request a missing document.
-- Only call finish after you've gathered enough context through questions/documents.
+- Only call submit_report after you've gathered enough context through questions/documents.
+- After submit_report, you MUST call submit_pie_data, then submit_heatmap_data — all three in sequence.
 - Use ask_question liberally — it's cheap and makes the report much better. Ask about goals, clarify ambiguous merchants, confirm income sources, etc.
 - You may make at most $max_requests total interactions (document requests + questions combined).
 - If the user declines or skips, proceed with what you have.
@@ -258,9 +265,9 @@ ASK_QUESTION_DECL = types.FunctionDeclaration(
     ),
 )
 
-FINISH_DECL = types.FunctionDeclaration(
-    name="finish",
-    description="Complete the analysis and return the final financial report.",
+SUBMIT_REPORT_DECL = types.FunctionDeclaration(
+    name="submit_report",
+    description="Submit the financial report with category breakdown for the bar chart. Call this FIRST when ready to finalize.",
     parameters_json_schema={
         "type": "object",
         "properties": {
@@ -268,6 +275,55 @@ FINISH_DECL = types.FunctionDeclaration(
         },
         "required": ["report"],
     },
+)
+
+PIE_SEGMENT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "segments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "total": {"type": "number"},
+                    "percentage": {"type": "number"},
+                },
+                "required": ["name", "total", "percentage"],
+            },
+        },
+    },
+    "required": ["segments"],
+}
+
+SUBMIT_PIE_DATA_DECL = types.FunctionDeclaration(
+    name="submit_pie_data",
+    description="Submit income allocation segments for the doughnut chart. Group spending into high-level buckets (Essentials, Lifestyle, Savings, Debt, etc.) showing how income is distributed. Call this SECOND, after submit_report.",
+    parameters_json_schema=PIE_SEGMENT_SCHEMA,
+)
+
+HEATMAP_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "daily_spending": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "date": {"type": "string", "description": "Date in YYYY-MM-DD format"},
+                    "total": {"type": "number", "description": "Total spending on this day"},
+                },
+                "required": ["date", "total"],
+            },
+        },
+    },
+    "required": ["daily_spending"],
+}
+
+SUBMIT_HEATMAP_DATA_DECL = types.FunctionDeclaration(
+    name="submit_heatmap_data",
+    description="Submit daily spending totals for the calendar heatmap. Provide one entry per day in the statement date range. Call this THIRD, after submit_pie_data.",
+    parameters_json_schema=HEATMAP_SCHEMA,
 )
 
 SEARCH_WEB_DECL = types.FunctionDeclaration(
@@ -286,7 +342,8 @@ SEARCH_WEB_DECL = types.FunctionDeclaration(
 )
 
 AGENT_TOOLS = [types.Tool(function_declarations=[
-    REQUEST_DOCUMENTS_DECL, ASK_QUESTION_DECL, FINISH_DECL, SEARCH_WEB_DECL,
+    REQUEST_DOCUMENTS_DECL, ASK_QUESTION_DECL, SUBMIT_REPORT_DECL,
+    SUBMIT_PIE_DATA_DECL, SUBMIT_HEATMAP_DATA_DECL, SEARCH_WEB_DECL,
 ])]
 
 
@@ -542,16 +599,40 @@ async def analyze_with_gemini_agent(
             text_parts = [p.text for p in response_content.parts if p.text and not getattr(p, "thought", False)]
             full_text = "".join(text_parts)
             try:
-                yield ("result", _attach_grounding(json.loads(full_text)))
+                yield ("report_ready", _attach_grounding(json.loads(full_text)))
             except (json.JSONDecodeError, ValueError):
                 yield ("error", "Agent failed to produce a valid report")
             return
 
         for fc in function_calls:
-            if fc.name == "finish":
+            if fc.name == "submit_report":
                 report_data = fc.args.get("report", fc.args)
-                logger.info("  Agent called finish")
-                yield ("result", _attach_grounding(report_data))
+                logger.info("  Agent called submit_report")
+                yield ("report_ready", _attach_grounding(report_data))
+                func_response = types.Part.from_function_response(
+                    name="submit_report",
+                    response={"result": "Report received. Now call submit_pie_data with income allocation segments for the doughnut chart. Group spending into high-level buckets (e.g., Essentials, Lifestyle, Savings, Debt) showing how income is distributed as a percentage of total income."},
+                )
+                contents.append(response_content)
+                contents.append(types.Content(role="user", parts=[func_response]))
+                break
+
+            elif fc.name == "submit_pie_data":
+                pie_data = fc.args.get("segments", [])
+                logger.info(f"  Agent called submit_pie_data ({len(pie_data)} segments)")
+                yield ("pie_chart_ready", {"segments": pie_data})
+                func_response = types.Part.from_function_response(
+                    name="submit_pie_data",
+                    response={"result": "Pie chart data received. Now call submit_heatmap_data with daily spending totals. Provide one entry per day (YYYY-MM-DD format) covering the full statement date range."},
+                )
+                contents.append(response_content)
+                contents.append(types.Content(role="user", parts=[func_response]))
+                break
+
+            elif fc.name == "submit_heatmap_data":
+                heatmap_data = fc.args.get("daily_spending", [])
+                logger.info(f"  Agent called submit_heatmap_data ({len(heatmap_data)} days)")
+                yield ("heatmap_ready", {"daily_spending": heatmap_data})
                 return
 
             elif fc.name == "search_web":

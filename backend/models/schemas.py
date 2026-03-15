@@ -46,6 +46,17 @@ class GroundingData(BaseModel):
     search_entry_point_html: str | None = None
 
 
+class PieSegment(BaseModel):
+    name: str
+    total: float
+    percentage: float
+
+
+class DailySpending(BaseModel):
+    date: str
+    total: float
+
+
 class FinancialReport(BaseModel):
     summary: FinancialSummary
     categories: list[CategoryBreakdown]
@@ -53,6 +64,8 @@ class FinancialReport(BaseModel):
     insights: list[str]
     monthly_trend: list[MonthlyTrend]
     grounding: GroundingData | None = None
+    pie_segments: list[PieSegment] = []
+    daily_spending: list[DailySpending] = []
 
 
 class AnalysisResult(BaseModel):
