@@ -88,6 +88,7 @@ Categories should include things like: Food & Dining, Transportation, Shopping, 
 - If the user declines or skips, proceed with what you have.
 - Incorporate user answers into your insights and recommendations.
 - You can reference external data (market rates, national averages, benchmarks) — the system will search for this automatically. When citing external data in insights, be specific.
+- IMPORTANT: Add a final string to the "insights" array containing a brief disclaimer that you are an AI, not a licensed financial advisor, and that the user should consult a real professional for actual financial advice.
 
 Bank statement data:
 ---
@@ -128,6 +129,8 @@ Answer the user's question directly, clearly, and concisely based on their origi
 If they ask a "what-if" question, project the new numbers (e.g., how much they would save) and provide a helpful insight.
 
 $language_instruction
+
+IMPORTANT: You are an AI, not a licensed financial advisor. Always append a brief disclaimer at the end of every response reminding the user of this, and to consult a real professional for actual financial advice.
 
 Original Financial Report Context:
 $report_json
