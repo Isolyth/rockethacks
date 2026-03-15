@@ -1,4 +1,4 @@
-# Easy MonAI
+# Easy MonAI (read disclosures below)
 
 A full-stack financial analysis app that uses Google's Gemini AI to analyze bank statements (PDF/CSV) and generate financial reports and podcast scripts.
 
@@ -108,3 +108,14 @@ docker compose up -d --build
 ```
 
 Services: backend (port 8000), frontend (port 3000), nginx (80/443 with Let's Encrypt), certbot (auto-renewal).
+
+
+#DISCLOSURES
+1. This project is for educational and demonstration purposes only. EasyMonAI does not provide financial, legal, tax, or investment advice, and no output that is generated should be used as professional guidance. Individuals using this application are solely responsible for verifying the accuracy of any insights or summaries produced by this application.
+2. Easy MonAI uses third party AI services and cloud infrastructure.
+3. While security steps were taken, we don't make any garuntees for data confidentiality, integrity, or availability. We assume no liability for any data loss, unauthorized access, or misuse of software.
+4. By using this project you ackowledge the following
+   - You are responsible for safegaurding your own credentials, API keys, and uploaded data
+   - You understand that all analysis generated may contain errors or ommissions
+   - You agree that the maintainers, contributors, and other affiliated parties are not liable for any damages, losses, or consequences arising from the use of this software.
+5. Use this project at your own risk.
