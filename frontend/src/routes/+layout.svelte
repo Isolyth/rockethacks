@@ -28,7 +28,9 @@
 {#if showNav}
 	<header class="app-header">
 		<div class="header-content">
-			<a href="/" class="logo"><img src="/logo.svg" alt="Easy MonAI" /></a>
+			{#if currentPath !== '/'}
+				<a href="/" class="logo"><img src="/logo.svg" alt="Easy MonAI" /></a>
+			{/if}
 			<nav class="nav-links">
 				{#if isAuthenticated()}
 					<a href="/dashboard" class="nav-link" class:active={currentPath === '/dashboard'}

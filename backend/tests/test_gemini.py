@@ -120,7 +120,9 @@ class TestPrompts:
     def test_agent_prompt_mentions_tools(self):
         assert "request_documents" in AGENT_PROMPT
         assert "ask_question" in AGENT_PROMPT
-        assert "finish" in AGENT_PROMPT
+        assert "submit_report" in AGENT_PROMPT
+        assert "submit_pie_data" in AGENT_PROMPT
+        assert "submit_heatmap_data" in AGENT_PROMPT
         assert "search_web" in AGENT_PROMPT
 
     def test_podcast_prompt_mentions_tts(self):
@@ -137,12 +139,47 @@ class TestMaxDocumentRequests:
 
 # ── analyze_with_gemini_agent ────────────────────────────────────────────────
 
+def _make_tool_call_content(name, args):
+    """Helper to create a mock content with a function call."""
+    mock_fc = MagicMock()
+    mock_fc.name = name
+    mock_fc.args = args
+    mock_part = MagicMock()
+    mock_part.function_call = mock_fc
+    mock_part.text = None
+    mock_part.thought = False
+    mock_content = MagicMock()
+    mock_content.parts = [mock_part]
+    return mock_content
+
+
+def _make_three_tool_stream(report_data, pie_segments=None, daily_spending=None):
+    """Create a fake_stream that yields submit_report → submit_pie_data → submit_heatmap_data."""
+    if pie_segments is None:
+        pie_segments = [{"name": "Essentials", "total": 400, "percentage": 80}]
+    if daily_spending is None:
+        daily_spending = [{"date": "2024-01-01", "total": 50}]
+
+    contents_list = [
+        _make_tool_call_content("submit_report", {"report": report_data}),
+        _make_tool_call_content("submit_pie_data", {"segments": pie_segments}),
+        _make_tool_call_content("submit_heatmap_data", {"daily_spending": daily_spending}),
+    ]
+    call_count = 0
+
+    async def fake_stream(contents, config):
+        nonlocal call_count
+        if call_count < len(contents_list):
+            yield ("_response", contents_list[call_count])
+            call_count += 1
+
+    return fake_stream
+
+
 class TestAnalyzeWithGeminiAgent:
     @pytest.mark.asyncio
-    async def test_yields_result_on_finish(self):
-        """Agent calls finish() → yields ("result", report_data)."""
-        from google.genai import types
-
+    async def test_yields_report_ready_on_submit_report(self):
+        """Agent calls submit_report → submit_pie_data → submit_heatmap_data → yields all events."""
         report_data = {
             "summary": {"total_income": 1000, "total_expenses": 500, "net_savings": 500, "date_range": "Jan"},
             "categories": [],
@@ -151,22 +188,7 @@ class TestAnalyzeWithGeminiAgent:
             "monthly_trend": [],
         }
 
-        # Create a mock function call for finish
-        mock_fc = MagicMock()
-        mock_fc.name = "finish"
-        mock_fc.args = {"report": report_data}
-
-        mock_part = MagicMock()
-        mock_part.function_call = mock_fc
-        mock_part.text = None
-        mock_part.thought = False
-
-        mock_content = MagicMock()
-        mock_content.parts = [mock_part]
-
-        async def fake_stream(contents, config):
-            yield ("_response", mock_content)
-
+        fake_stream = _make_three_tool_stream(report_data)
         session = Session(session_id="test")
 
         with patch("services.gemini._stream_via_thread", side_effect=fake_stream):
@@ -176,9 +198,15 @@ class TestAnalyzeWithGeminiAgent:
             ):
                 events.append((event_type, event_data))
 
-        result_events = [(t, d) for t, d in events if t == "result"]
-        assert len(result_events) == 1
-        assert result_events[0][1] == report_data
+        report_events = [(t, d) for t, d in events if t == "report_ready"]
+        assert len(report_events) == 1
+        assert report_events[0][1] == report_data
+
+        pie_events = [(t, d) for t, d in events if t == "pie_chart_ready"]
+        assert len(pie_events) == 1
+
+        heatmap_events = [(t, d) for t, d in events if t == "heatmap_ready"]
+        assert len(heatmap_events) == 1
 
     @pytest.mark.asyncio
     async def test_yields_error_on_empty_response(self):
@@ -202,22 +230,25 @@ class TestAnalyzeWithGeminiAgent:
     @pytest.mark.asyncio
     async def test_yields_thinking_events(self):
         """Thinking chunks are forwarded as ("thinking", text)."""
-        mock_fc = MagicMock()
-        mock_fc.name = "finish"
-        mock_fc.args = {"report": {"summary": {"total_income": 0, "total_expenses": 0, "net_savings": 0, "date_range": ""}, "categories": [], "top_merchants": [], "insights": [], "monthly_trend": []}}
+        report_data = {"summary": {"total_income": 0, "total_expenses": 0, "net_savings": 0, "date_range": ""}, "categories": [], "top_merchants": [], "insights": [], "monthly_trend": []}
 
-        mock_part = MagicMock()
-        mock_part.function_call = mock_fc
-        mock_part.text = None
-        mock_part.thought = False
+        report_content = _make_tool_call_content("submit_report", {"report": report_data})
+        pie_content = _make_tool_call_content("submit_pie_data", {"segments": []})
+        heatmap_content = _make_tool_call_content("submit_heatmap_data", {"daily_spending": []})
 
-        mock_content = MagicMock()
-        mock_content.parts = [mock_part]
+        call_count = 0
 
         async def fake_stream(contents, config):
-            yield ("thinking", "Let me analyze this...")
-            yield ("thinking", "Looking at the data...")
-            yield ("_response", mock_content)
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                yield ("thinking", "Let me analyze this...")
+                yield ("thinking", "Looking at the data...")
+                yield ("_response", report_content)
+            elif call_count == 2:
+                yield ("_response", pie_content)
+            else:
+                yield ("_response", heatmap_content)
 
         session = Session(session_id="test")
 
@@ -235,29 +266,11 @@ class TestAnalyzeWithGeminiAgent:
     @pytest.mark.asyncio
     async def test_yields_request_documents(self):
         """Agent calls request_documents → yields event and reads session response."""
-        mock_fc_req = MagicMock()
-        mock_fc_req.name = "request_documents"
-        mock_fc_req.args = {"document_type": "pay stub", "reason": "need income"}
-
-        mock_part_req = MagicMock()
-        mock_part_req.function_call = mock_fc_req
-        mock_part_req.text = None
-        mock_part_req.thought = False
-
-        mock_content_req = MagicMock()
-        mock_content_req.parts = [mock_part_req]
-
-        mock_fc_finish = MagicMock()
-        mock_fc_finish.name = "finish"
-        mock_fc_finish.args = {"report": {"summary": {"total_income": 0, "total_expenses": 0, "net_savings": 0, "date_range": ""}, "categories": [], "top_merchants": [], "insights": [], "monthly_trend": []}}
-
-        mock_part_finish = MagicMock()
-        mock_part_finish.function_call = mock_fc_finish
-        mock_part_finish.text = None
-        mock_part_finish.thought = False
-
-        mock_content_finish = MagicMock()
-        mock_content_finish.parts = [mock_part_finish]
+        report_data = {"summary": {"total_income": 0, "total_expenses": 0, "net_savings": 0, "date_range": ""}, "categories": [], "top_merchants": [], "insights": [], "monthly_trend": []}
+        mock_content_req = _make_tool_call_content("request_documents", {"document_type": "pay stub", "reason": "need income"})
+        mock_content_report = _make_tool_call_content("submit_report", {"report": report_data})
+        mock_content_pie = _make_tool_call_content("submit_pie_data", {"segments": []})
+        mock_content_heatmap = _make_tool_call_content("submit_heatmap_data", {"daily_spending": []})
 
         call_count = 0
 
@@ -266,8 +279,12 @@ class TestAnalyzeWithGeminiAgent:
             call_count += 1
             if call_count == 1:
                 yield ("_response", mock_content_req)
+            elif call_count == 2:
+                yield ("_response", mock_content_report)
+            elif call_count == 3:
+                yield ("_response", mock_content_pie)
             else:
-                yield ("_response", mock_content_finish)
+                yield ("_response", mock_content_heatmap)
 
         session = Session(session_id="test")
         session.user_response = {"action": "skip"}
@@ -279,7 +296,6 @@ class TestAnalyzeWithGeminiAgent:
             ):
                 events.append((event_type, event_data))
                 if event_type == "request_documents":
-                    # Simulate route handler setting the response
                     session.user_response = {"action": "skip"}
 
         doc_events = [(t, d) for t, d in events if t == "request_documents"]
@@ -289,29 +305,11 @@ class TestAnalyzeWithGeminiAgent:
     @pytest.mark.asyncio
     async def test_yields_ask_question(self):
         """Agent calls ask_question → yields event and reads session response."""
-        mock_fc_ask = MagicMock()
-        mock_fc_ask.name = "ask_question"
-        mock_fc_ask.args = {"question": "What is your goal?", "options": ["Save more", "Reduce debt"]}
-
-        mock_part_ask = MagicMock()
-        mock_part_ask.function_call = mock_fc_ask
-        mock_part_ask.text = None
-        mock_part_ask.thought = False
-
-        mock_content_ask = MagicMock()
-        mock_content_ask.parts = [mock_part_ask]
-
-        mock_fc_finish = MagicMock()
-        mock_fc_finish.name = "finish"
-        mock_fc_finish.args = {"report": {"summary": {"total_income": 0, "total_expenses": 0, "net_savings": 0, "date_range": ""}, "categories": [], "top_merchants": [], "insights": [], "monthly_trend": []}}
-
-        mock_part_finish = MagicMock()
-        mock_part_finish.function_call = mock_fc_finish
-        mock_part_finish.text = None
-        mock_part_finish.thought = False
-
-        mock_content_finish = MagicMock()
-        mock_content_finish.parts = [mock_part_finish]
+        report_data = {"summary": {"total_income": 0, "total_expenses": 0, "net_savings": 0, "date_range": ""}, "categories": [], "top_merchants": [], "insights": [], "monthly_trend": []}
+        mock_content_ask = _make_tool_call_content("ask_question", {"question": "What is your goal?", "options": ["Save more", "Reduce debt"]})
+        mock_content_report = _make_tool_call_content("submit_report", {"report": report_data})
+        mock_content_pie = _make_tool_call_content("submit_pie_data", {"segments": []})
+        mock_content_heatmap = _make_tool_call_content("submit_heatmap_data", {"daily_spending": []})
 
         call_count = 0
 
@@ -320,8 +318,12 @@ class TestAnalyzeWithGeminiAgent:
             call_count += 1
             if call_count == 1:
                 yield ("_response", mock_content_ask)
+            elif call_count == 2:
+                yield ("_response", mock_content_report)
+            elif call_count == 3:
+                yield ("_response", mock_content_pie)
             else:
-                yield ("_response", mock_content_finish)
+                yield ("_response", mock_content_heatmap)
 
         session = Session(session_id="test")
 
@@ -342,23 +344,22 @@ class TestAnalyzeWithGeminiAgent:
     @pytest.mark.asyncio
     async def test_multi_file_prompt_includes_reminder(self):
         """When file_count > 1, the MULTI_DOC_REMINDER is included."""
-        mock_fc = MagicMock()
-        mock_fc.name = "finish"
-        mock_fc.args = {"report": {"summary": {"total_income": 0, "total_expenses": 0, "net_savings": 0, "date_range": ""}, "categories": [], "top_merchants": [], "insights": [], "monthly_trend": []}}
-
-        mock_part = MagicMock()
-        mock_part.function_call = mock_fc
-        mock_part.text = None
-        mock_part.thought = False
-
-        mock_content = MagicMock()
-        mock_content.parts = [mock_part]
+        report_data = {"summary": {"total_income": 0, "total_expenses": 0, "net_savings": 0, "date_range": ""}, "categories": [], "top_merchants": [], "insights": [], "monthly_trend": []}
 
         captured_contents = []
+        contents_list = [
+            _make_tool_call_content("submit_report", {"report": report_data}),
+            _make_tool_call_content("submit_pie_data", {"segments": []}),
+            _make_tool_call_content("submit_heatmap_data", {"daily_spending": []}),
+        ]
+        call_count = 0
 
         async def fake_stream(contents, config):
+            nonlocal call_count
             captured_contents.append(contents)
-            yield ("_response", mock_content)
+            if call_count < len(contents_list):
+                yield ("_response", contents_list[call_count])
+                call_count += 1
 
         session = Session(session_id="test")
 
@@ -375,7 +376,7 @@ class TestAnalyzeWithGeminiAgent:
 
     @pytest.mark.asyncio
     async def test_text_fallback_valid_json(self):
-        """Model returns text (no tool calls) with valid JSON → treated as result."""
+        """Model returns text (no tool calls) with valid JSON → treated as report_ready."""
         mock_part = MagicMock()
         mock_part.function_call = None
         mock_part.text = json.dumps({"summary": {"total_income": 100, "total_expenses": 50, "net_savings": 50, "date_range": "Jan"}, "categories": [], "top_merchants": [], "insights": [], "monthly_trend": []})
@@ -396,7 +397,7 @@ class TestAnalyzeWithGeminiAgent:
             ):
                 events.append((event_type, event_data))
 
-        result_events = [e for e in events if e[0] == "result"]
+        result_events = [e for e in events if e[0] == "report_ready"]
         assert len(result_events) == 1
 
     @pytest.mark.asyncio
@@ -559,32 +560,15 @@ class TestDeduplicateSources:
 class TestAgentSearchGrounding:
     @pytest.mark.asyncio
     async def test_search_web_continues_loop(self):
-        """Agent calls search_web → gets grounded result → loop continues to finish."""
-        # First response: agent calls search_web
-        mock_fc_search = MagicMock()
-        mock_fc_search.name = "search_web"
-        mock_fc_search.args = {"query": "average US savings rate 2024"}
-        mock_search_part = MagicMock()
-        mock_search_part.function_call = mock_fc_search
-        mock_search_part.text = None
-        mock_search_part.thought = False
-        mock_search_content = MagicMock()
-        mock_search_content.parts = [mock_search_part]
-
-        # Second response: finish
+        """Agent calls search_web → gets grounded result → loop continues to submit_report."""
         report_data = {
             "summary": {"total_income": 1000, "total_expenses": 500, "net_savings": 500, "date_range": "Jan"},
             "categories": [], "top_merchants": [], "insights": ["test"], "monthly_trend": [],
         }
-        mock_fc_finish = MagicMock()
-        mock_fc_finish.name = "finish"
-        mock_fc_finish.args = {"report": report_data}
-        mock_finish_part = MagicMock()
-        mock_finish_part.function_call = mock_fc_finish
-        mock_finish_part.text = None
-        mock_finish_part.thought = False
-        mock_finish_content = MagicMock()
-        mock_finish_content.parts = [mock_finish_part]
+        mock_search_content = _make_tool_call_content("search_web", {"query": "average US savings rate 2024"})
+        mock_report_content = _make_tool_call_content("submit_report", {"report": report_data})
+        mock_pie_content = _make_tool_call_content("submit_pie_data", {"segments": []})
+        mock_heatmap_content = _make_tool_call_content("submit_heatmap_data", {"daily_spending": []})
 
         call_count = 0
 
@@ -593,10 +577,13 @@ class TestAgentSearchGrounding:
             call_count += 1
             if call_count == 1:
                 yield ("_response", mock_search_content)
+            elif call_count == 2:
+                yield ("_response", mock_report_content)
+            elif call_count == 3:
+                yield ("_response", mock_pie_content)
             else:
-                yield ("_response", mock_finish_content)
+                yield ("_response", mock_heatmap_content)
 
-        # Mock the grounded search helper
         mock_grounding = MagicMock()
         web = MagicMock()
         web.uri = "https://example.com"
@@ -621,38 +608,21 @@ class TestAgentSearchGrounding:
             ):
                 events.append((event_type, event_data))
 
-        assert call_count == 2
-        result_events = [(t, d) for t, d in events if t == "result"]
-        assert len(result_events) == 1
+        assert call_count == 4
+        report_events = [(t, d) for t, d in events if t == "report_ready"]
+        assert len(report_events) == 1
 
     @pytest.mark.asyncio
-    async def test_grounding_attached_to_finish(self):
-        """search_web → finish → result includes grounding data from search."""
-        # Search call
-        mock_fc_search = MagicMock()
-        mock_fc_search.name = "search_web"
-        mock_fc_search.args = {"query": "test query"}
-        mock_search_part = MagicMock()
-        mock_search_part.function_call = mock_fc_search
-        mock_search_part.text = None
-        mock_search_part.thought = False
-        mock_search_content = MagicMock()
-        mock_search_content.parts = [mock_search_part]
-
-        # Finish call
+    async def test_grounding_attached_to_report(self):
+        """search_web → submit_report → report_ready includes grounding data from search."""
         report_data = {
             "summary": {"total_income": 1000, "total_expenses": 500, "net_savings": 500, "date_range": "Jan"},
             "categories": [], "top_merchants": [], "insights": [], "monthly_trend": [],
         }
-        mock_fc_finish = MagicMock()
-        mock_fc_finish.name = "finish"
-        mock_fc_finish.args = {"report": report_data}
-        mock_finish_part = MagicMock()
-        mock_finish_part.function_call = mock_fc_finish
-        mock_finish_part.text = None
-        mock_finish_part.thought = False
-        mock_finish_content = MagicMock()
-        mock_finish_content.parts = [mock_finish_part]
+        mock_search_content = _make_tool_call_content("search_web", {"query": "test query"})
+        mock_report_content = _make_tool_call_content("submit_report", {"report": report_data})
+        mock_pie_content = _make_tool_call_content("submit_pie_data", {"segments": []})
+        mock_heatmap_content = _make_tool_call_content("submit_heatmap_data", {"daily_spending": []})
 
         call_count = 0
 
@@ -661,8 +631,12 @@ class TestAgentSearchGrounding:
             call_count += 1
             if call_count == 1:
                 yield ("_response", mock_search_content)
+            elif call_count == 2:
+                yield ("_response", mock_report_content)
+            elif call_count == 3:
+                yield ("_response", mock_pie_content)
             else:
-                yield ("_response", mock_finish_content)
+                yield ("_response", mock_heatmap_content)
 
         mock_grounding = MagicMock()
         web = MagicMock()
@@ -688,9 +662,9 @@ class TestAgentSearchGrounding:
             ):
                 events.append((event_type, event_data))
 
-        result_events = [(t, d) for t, d in events if t == "result"]
-        assert len(result_events) == 1
-        result = result_events[0][1]
+        report_events = [(t, d) for t, d in events if t == "report_ready"]
+        assert len(report_events) == 1
+        result = report_events[0][1]
         assert "grounding" in result
         assert len(result["grounding"]["sources"]) == 1
         assert result["grounding"]["sources"][0]["uri"] == "https://example.com/data"
@@ -698,29 +672,14 @@ class TestAgentSearchGrounding:
     @pytest.mark.asyncio
     async def test_search_failure_still_continues(self):
         """If grounded search fails, agent still gets a response and can continue."""
-        mock_fc_search = MagicMock()
-        mock_fc_search.name = "search_web"
-        mock_fc_search.args = {"query": "test"}
-        mock_search_part = MagicMock()
-        mock_search_part.function_call = mock_fc_search
-        mock_search_part.text = None
-        mock_search_part.thought = False
-        mock_search_content = MagicMock()
-        mock_search_content.parts = [mock_search_part]
-
         report_data = {
             "summary": {"total_income": 0, "total_expenses": 0, "net_savings": 0, "date_range": ""},
             "categories": [], "top_merchants": [], "insights": [], "monthly_trend": [],
         }
-        mock_fc_finish = MagicMock()
-        mock_fc_finish.name = "finish"
-        mock_fc_finish.args = {"report": report_data}
-        mock_finish_part = MagicMock()
-        mock_finish_part.function_call = mock_fc_finish
-        mock_finish_part.text = None
-        mock_finish_part.thought = False
-        mock_finish_content = MagicMock()
-        mock_finish_content.parts = [mock_finish_part]
+        mock_search_content = _make_tool_call_content("search_web", {"query": "test"})
+        mock_report_content = _make_tool_call_content("submit_report", {"report": report_data})
+        mock_pie_content = _make_tool_call_content("submit_pie_data", {"segments": []})
+        mock_heatmap_content = _make_tool_call_content("submit_heatmap_data", {"daily_spending": []})
 
         call_count = 0
 
@@ -729,8 +688,12 @@ class TestAgentSearchGrounding:
             call_count += 1
             if call_count == 1:
                 yield ("_response", mock_search_content)
+            elif call_count == 2:
+                yield ("_response", mock_report_content)
+            elif call_count == 3:
+                yield ("_response", mock_pie_content)
             else:
-                yield ("_response", mock_finish_content)
+                yield ("_response", mock_heatmap_content)
 
         async def fake_search(query):
             return "Search failed: API error", None  # No grounding
@@ -745,10 +708,10 @@ class TestAgentSearchGrounding:
             ):
                 events.append((event_type, event_data))
 
-        result_events = [(t, d) for t, d in events if t == "result"]
-        assert len(result_events) == 1
+        report_events = [(t, d) for t, d in events if t == "report_ready"]
+        assert len(report_events) == 1
         # No grounding since search failed
-        assert "grounding" not in result_events[0][1]
+        assert "grounding" not in report_events[0][1]
 
 
 # ── generate_podcast_script ──────────────────────────────────────────────────

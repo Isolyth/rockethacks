@@ -121,7 +121,9 @@ class TestWsAnalyze:
         }
 
         async def fake_agent(text, file_count, session, language="en", **kw):
-            yield ("result", VALID_REPORT_DATA)
+            yield ("report_ready", VALID_REPORT_DATA)
+            yield ("pie_chart_ready", {"segments": [{"name": "Essentials", "total": 2000, "percentage": 62.5}]})
+            yield ("heatmap_ready", {"daily_spending": [{"date": "2024-01-01", "total": 50}]})
 
         with (
             patch("routes.analyze.analyze_with_gemini_agent", side_effect=fake_agent),
@@ -148,7 +150,9 @@ class TestWsAnalyze:
     def test_pdf_upload(self):
         """PDF file is parsed and sent to agent."""
         async def fake_agent(text, file_count, session, language="en", **kw):
-            yield ("result", VALID_REPORT_DATA)
+            yield ("report_ready", VALID_REPORT_DATA)
+            yield ("pie_chart_ready", {"segments": [{"name": "Essentials", "total": 2000, "percentage": 62.5}]})
+            yield ("heatmap_ready", {"daily_spending": [{"date": "2024-01-01", "total": 50}]})
 
         mock_audio = {"audio_base64": "data", "sentences": []}
 
@@ -202,7 +206,9 @@ class TestWsAnalyze:
 
         async def fake_agent(text, file_count, session, language="en", **kw):
             captured_text.append(text)
-            yield ("result", VALID_REPORT_DATA)
+            yield ("report_ready", VALID_REPORT_DATA)
+            yield ("pie_chart_ready", {"segments": [{"name": "Essentials", "total": 2000, "percentage": 62.5}]})
+            yield ("heatmap_ready", {"daily_spending": [{"date": "2024-01-01", "total": 50}]})
 
         mock_audio = {"audio_base64": "data", "sentences": []}
 
@@ -229,7 +235,9 @@ class TestWsAnalyze:
 
         async def fake_agent(text, file_count, session, language="en", **kw):
             captured_lang.append(language)
-            yield ("result", VALID_REPORT_DATA)
+            yield ("report_ready", VALID_REPORT_DATA)
+            yield ("pie_chart_ready", {"segments": [{"name": "Essentials", "total": 2000, "percentage": 62.5}]})
+            yield ("heatmap_ready", {"daily_spending": [{"date": "2024-01-01", "total": 50}]})
 
         mock_audio = {"audio_base64": "data", "sentences": []}
 
@@ -278,7 +286,9 @@ class TestWsAnalyze:
         async def fake_agent(text, file_count, session, language="en", **kw):
             yield ("thinking", "Analyzing data...")
             yield ("thinking", "Looking at categories...")
-            yield ("result", VALID_REPORT_DATA)
+            yield ("report_ready", VALID_REPORT_DATA)
+            yield ("pie_chart_ready", {"segments": [{"name": "Essentials", "total": 2000, "percentage": 62.5}]})
+            yield ("heatmap_ready", {"daily_spending": [{"date": "2024-01-01", "total": 50}]})
 
         mock_audio = {"audio_base64": "data", "sentences": []}
 
@@ -299,7 +309,9 @@ class TestWsAnalyze:
     def test_tts_failure_fallback(self):
         """If ElevenLabs TTS fails, podcast script is still sent without audio."""
         async def fake_agent(text, file_count, session, language="en", **kw):
-            yield ("result", VALID_REPORT_DATA)
+            yield ("report_ready", VALID_REPORT_DATA)
+            yield ("pie_chart_ready", {"segments": [{"name": "Essentials", "total": 2000, "percentage": 62.5}]})
+            yield ("heatmap_ready", {"daily_spending": [{"date": "2024-01-01", "total": 50}]})
 
         with (
             patch("routes.analyze.analyze_with_gemini_agent", side_effect=fake_agent),
@@ -319,7 +331,9 @@ class TestWsAnalyze:
     def test_progress_steps_in_order(self):
         """Progress messages follow parsing → analyzing → generating → narrating order."""
         async def fake_agent(text, file_count, session, language="en", **kw):
-            yield ("result", VALID_REPORT_DATA)
+            yield ("report_ready", VALID_REPORT_DATA)
+            yield ("pie_chart_ready", {"segments": [{"name": "Essentials", "total": 2000, "percentage": 62.5}]})
+            yield ("heatmap_ready", {"daily_spending": [{"date": "2024-01-01", "total": 50}]})
 
         mock_audio = {"audio_base64": "data", "sentences": []}
 
@@ -349,7 +363,9 @@ class TestWsAnalyze:
         """Agent requests a document, client skips → agent finishes."""
         async def fake_agent(text, file_count, session, language="en", **kw):
             yield ("request_documents", {"document_type": "pay stub", "reason": "need income"})
-            yield ("result", VALID_REPORT_DATA)
+            yield ("report_ready", VALID_REPORT_DATA)
+            yield ("pie_chart_ready", {"segments": [{"name": "Essentials", "total": 2000, "percentage": 62.5}]})
+            yield ("heatmap_ready", {"daily_spending": [{"date": "2024-01-01", "total": 50}]})
 
         mock_audio = {"audio_base64": "data", "sentences": []}
 
@@ -376,7 +392,9 @@ class TestWsAnalyze:
         """Agent asks a question, client answers → agent finishes."""
         async def fake_agent(text, file_count, session, language="en", **kw):
             yield ("ask_question", {"question": "What is your goal?", "options": ["Save", "Budget"]})
-            yield ("result", VALID_REPORT_DATA)
+            yield ("report_ready", VALID_REPORT_DATA)
+            yield ("pie_chart_ready", {"segments": [{"name": "Essentials", "total": 2000, "percentage": 62.5}]})
+            yield ("heatmap_ready", {"daily_spending": [{"date": "2024-01-01", "total": 50}]})
 
         mock_audio = {"audio_base64": "data", "sentences": []}
 

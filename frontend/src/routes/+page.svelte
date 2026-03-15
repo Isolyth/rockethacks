@@ -190,7 +190,7 @@
 	}
 
 	.hero-logo {
-		height: 70px;
+		height: 120px;
 		width: auto;
 		align-self: flex-start;
 		animation: fadeInUp 0.5s ease both;
