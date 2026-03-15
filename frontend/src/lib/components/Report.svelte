@@ -64,50 +64,71 @@
 		});
 	});
 
-	// Heatmap computed values
-	const heatmapGrid = $derived(() => {
+	// Heatmap computed values — grouped by month for multi-month support
+	interface HeatmapDay { date: string; day: number; total: number; inRange: boolean }
+	interface HeatmapMonth { label: string; weeks: HeatmapDay[][] }
+
+	const heatmapData = $derived(() => {
 		const data = dailySpending ?? [];
-		if (data.length === 0) return { weeks: [], dayLabels: [], maxTotal: 0 };
+		if (data.length === 0) return { months: [] as HeatmapMonth[], dayLabels: [] as string[], maxTotal: 0 };
 
 		const sorted = [...data].sort((a, b) => a.date.localeCompare(b.date));
 		const maxTotal = Math.max(...sorted.map((d) => d.total), 1);
 		const dayMap = new Map(sorted.map((d) => [d.date, d.total]));
 
-		// Find the date range
 		const startDate = new Date(sorted[0].date + "T00:00:00");
 		const endDate = new Date(sorted[sorted.length - 1].date + "T00:00:00");
 
-		// Adjust start to Monday of that week
-		const startDay = startDate.getDay();
-		const mondayOffset = startDay === 0 ? -6 : 1 - startDay;
-		const gridStart = new Date(startDate);
-		gridStart.setDate(gridStart.getDate() + mondayOffset);
+		// Build month-by-month grids
+		const months: HeatmapMonth[] = [];
+		let cur = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
 
-		// Adjust end to Sunday of that week
-		const endDay = endDate.getDay();
-		const sundayOffset = endDay === 0 ? 0 : 7 - endDay;
-		const gridEnd = new Date(endDate);
-		gridEnd.setDate(gridEnd.getDate() + sundayOffset);
+		while (cur <= endDate) {
+			const year = cur.getFullYear();
+			const month = cur.getMonth();
+			const daysInMonth = new Date(year, month + 1, 0).getDate();
+			const label = cur.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 
-		const weeks: { date: string; total: number; inRange: boolean }[][] = [];
-		let current = new Date(gridStart);
+			// Find what weekday the 1st falls on (Mon=0 .. Sun=6)
+			const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
 
-		while (current <= gridEnd) {
-			const week: { date: string; total: number; inRange: boolean }[] = [];
-			for (let d = 0; d < 7; d++) {
-				const dateStr = current.toISOString().split("T")[0];
-				const inRange = current >= startDate && current <= endDate;
+			const weeks: HeatmapDay[][] = [];
+			let week: HeatmapDay[] = [];
+
+			// Leading empty cells
+			for (let p = 0; p < firstDow; p++) {
+				week.push({ date: "", day: 0, total: 0, inRange: false });
+			}
+
+			for (let d = 1; d <= daysInMonth; d++) {
+				const dateObj = new Date(year, month, d);
+				const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+				const inRange = dateObj >= startDate && dateObj <= endDate;
 				week.push({
 					date: dateStr,
+					day: d,
 					total: dayMap.get(dateStr) ?? 0,
 					inRange,
 				});
-				current.setDate(current.getDate() + 1);
+				if (week.length === 7) {
+					weeks.push(week);
+					week = [];
+				}
 			}
-			weeks.push(week);
+
+			// Trailing empty cells
+			if (week.length > 0) {
+				while (week.length < 7) {
+					week.push({ date: "", day: 0, total: 0, inRange: false });
+				}
+				weeks.push(week);
+			}
+
+			months.push({ label, weeks });
+			cur = new Date(year, month + 1, 1);
 		}
 
-		return { weeks, dayLabels: ["M", "T", "W", "T", "F", "S", "S"], maxTotal };
+		return { months, dayLabels: ["M", "T", "W", "T", "F", "S", "S"], maxTotal };
 	});
 
 	function heatmapColor(total: number, max: number): string {
@@ -121,11 +142,8 @@
 		return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 	}
 
-	function handleDayHover(
-		e: MouseEvent,
-		day: { date: string; total: number; inRange: boolean },
-	) {
-		if (!day.inRange) return;
+	function handleDayHover(e: MouseEvent, day: HeatmapDay) {
+		if (!day.inRange || day.day === 0) return;
 		const rect = (e.target as HTMLElement).getBoundingClientRect();
 		const parent = (e.target as HTMLElement).closest('.heatmap-container')?.getBoundingClientRect();
 		if (!parent) return;
@@ -278,32 +296,43 @@
 		{:else if activeChart === "heatmap"}
 			{#if dailySpending && dailySpending.length > 0}
 				<div class="heatmap-container" role="img" aria-label="Daily spending heatmap">
-					<div class="heatmap-day-labels">
-						{#each heatmapGrid().dayLabels as label}
-							<span class="day-label">{label}</span>
-						{/each}
-					</div>
-					<div class="heatmap-grid">
-						{#each heatmapGrid().weeks as week}
-							<div class="heatmap-week">
-								{#each week as day}
-									<div
-										class="heatmap-cell"
-										class:out-of-range={!day.inRange}
-										style="background: {day.inRange
-											? heatmapColor(
-													day.total,
-													heatmapGrid().maxTotal,
-												)
-											: 'transparent'}"
-										onmouseenter={(e) => handleDayHover(e, day)}
-										onmouseleave={() => (hoveredDay = null)}
-										role="presentation"
-									></div>
+					{#each heatmapData().months as month}
+						<div class="heatmap-month">
+							<h4 class="month-label">{month.label}</h4>
+							<div class="heatmap-day-labels">
+								{#each heatmapData().dayLabels as label}
+									<span class="day-label">{label}</span>
 								{/each}
 							</div>
-						{/each}
-					</div>
+							<div class="heatmap-grid">
+								{#each month.weeks as week}
+									<div class="heatmap-week">
+										{#each week as day}
+											{#if day.day === 0}
+												<div class="heatmap-cell empty"></div>
+											{:else}
+												<div
+													class="heatmap-cell"
+													class:out-of-range={!day.inRange}
+													style="background: {day.inRange
+														? heatmapColor(
+																day.total,
+																heatmapData().maxTotal,
+															)
+														: 'rgba(67, 97, 238, 0.04)'}"
+													onmouseenter={(e) => handleDayHover(e, day)}
+													onmouseleave={() => (hoveredDay = null)}
+													role="presentation"
+												>
+													<span class="cell-date">{day.day}</span>
+												</div>
+											{/if}
+										{/each}
+									</div>
+								{/each}
+							</div>
+						</div>
+					{/each}
 					{#if hoveredDay}
 						<div
 							class="heatmap-tooltip"
@@ -322,8 +351,8 @@
 								<div
 									class="legend-cell"
 									style="background: {heatmapColor(
-										intensity * (heatmapGrid().maxTotal || 1),
-										heatmapGrid().maxTotal || 1,
+										intensity * (heatmapData().maxTotal || 1),
+										heatmapData().maxTotal || 1,
 									)}"
 								></div>
 							{/each}
@@ -643,51 +672,85 @@
 	.heatmap-container {
 		position: relative;
 		animation: fadeIn 0.4s ease both;
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
+	}
+
+	.heatmap-month {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+	}
+
+	.month-label {
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: var(--color-text-muted);
+		margin-bottom: 0.35rem;
 	}
 
 	.heatmap-day-labels {
 		display: grid;
 		grid-template-columns: repeat(7, 1fr);
-		gap: 3px;
-		margin-bottom: 4px;
-		padding-left: 0;
+		gap: 2px;
+		margin-bottom: 2px;
 	}
 
 	.day-label {
 		text-align: center;
-		font-size: 0.7rem;
+		font-size: 0.6rem;
 		color: var(--color-text-muted);
 	}
 
 	.heatmap-grid {
 		display: flex;
 		flex-direction: column;
-		gap: 3px;
+		gap: 2px;
 	}
 
 	.heatmap-week {
 		display: grid;
 		grid-template-columns: repeat(7, 1fr);
-		gap: 3px;
+		gap: 2px;
 	}
 
 	.heatmap-cell {
 		aspect-ratio: 1;
-		border-radius: 3px;
+		border-radius: 2px;
 		cursor: pointer;
 		transition: transform 0.15s ease, box-shadow 0.15s ease;
-		min-height: 16px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		position: relative;
 	}
 
-	.heatmap-cell:hover:not(.out-of-range) {
-		transform: scale(1.2);
-		box-shadow: 0 0 8px rgba(67, 97, 238, 0.4);
+	.heatmap-cell.empty {
+		cursor: default;
+	}
+
+	.cell-date {
+		font-size: 0.55rem;
+		font-weight: 500;
+		color: rgba(255, 255, 255, 0.7);
+		line-height: 1;
+		pointer-events: none;
+	}
+
+	.heatmap-cell:hover:not(.out-of-range):not(.empty) {
+		transform: scale(1.15);
+		box-shadow: 0 0 6px rgba(67, 97, 238, 0.4);
 		z-index: 1;
 	}
 
 	.heatmap-cell.out-of-range {
 		cursor: default;
-		opacity: 0.15;
+		opacity: 0.2;
+	}
+
+	.heatmap-cell.out-of-range .cell-date {
+		opacity: 0.5;
 	}
 
 	.heatmap-tooltip {
@@ -722,7 +785,7 @@
 		align-items: center;
 		justify-content: center;
 		gap: 0.4rem;
-		margin-top: 0.75rem;
+		margin-top: 0;
 	}
 
 	.legend-label {
@@ -736,8 +799,8 @@
 	}
 
 	.legend-cell {
-		width: 14px;
-		height: 14px;
+		width: 12px;
+		height: 12px;
 		border-radius: 2px;
 	}
 
@@ -775,22 +838,21 @@
 	.skeleton-grid {
 		display: flex;
 		flex-direction: column;
-		gap: 3px;
+		gap: 2px;
 		width: 100%;
 	}
 
 	.skeleton-row {
 		display: grid;
 		grid-template-columns: repeat(7, 1fr);
-		gap: 3px;
+		gap: 2px;
 	}
 
 	.skeleton-cell {
 		aspect-ratio: 1;
-		border-radius: 3px;
+		border-radius: 2px;
 		background: var(--color-surface-2);
 		animation: pulse 1.5s ease-in-out infinite;
-		min-height: 16px;
 	}
 
 	@keyframes pulse {
