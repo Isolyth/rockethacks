@@ -54,7 +54,9 @@
 </script>
 
 <div class="thinking">
-	<div class="thinking-dot"></div>
+	<div class="coin-container">
+		<span class="dollar-sign">$</span>
+	</div>
 	<span class="thinking-label">{displayHeader}</span>
 </div>
 
@@ -63,25 +65,29 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		gap: 0.5rem;
+		gap: 0.6rem;
 	}
 
-	.thinking-dot {
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		background: var(--color-accent);
-		animation: pulse 1.5s ease-in-out infinite;
+	.coin-container {
+		perspective: 120px;
+		width: 24px;
+		height: 24px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
-	@keyframes pulse {
-		0%,
-		100% {
-			opacity: 0.4;
-		}
-		50% {
-			opacity: 1;
-		}
+	.dollar-sign {
+		display: inline-block;
+		font-size: 1.2rem;
+		font-weight: 800;
+		background: var(--gradient-gold);
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
+		animation: coinSpin 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+		transform-style: preserve-3d;
+		backface-visibility: visible;
 	}
 
 	.thinking-label {

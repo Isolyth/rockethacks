@@ -29,6 +29,7 @@
 	let files = $state<File[]>([]);
 	let selectedLanguage = $state("en");
 	let dragging = $state(false);
+	let dropFlash = $state(false);
 	let fileInput: HTMLInputElement;
 
 	let fileWarning = $state("");
@@ -37,10 +38,24 @@
 		const { valid, rejected } = filterValidFiles(newFiles);
 		files = [...files, ...valid];
 		fileWarning = rejected.length > 0 ? rejected.join(", ") : "";
+		// Brief success flash on add
+		if (valid.length > 0) {
+			dropFlash = true;
+			setTimeout(() => (dropFlash = false), 600);
+		}
 	}
 
 	function removeFile(index: number) {
-		files = files.filter((_, i) => i !== index);
+		// Animate out then remove
+		const el = document.querySelector(`.file-item[data-index="${index}"]`) as HTMLElement | null;
+		if (el) {
+			el.style.animation = 'fileSlideOut 0.25s ease forwards';
+			setTimeout(() => {
+				files = files.filter((_, i) => i !== index);
+			}, 250);
+		} else {
+			files = files.filter((_, i) => i !== index);
+		}
 	}
 
 	function handleDrop(e: DragEvent) {
@@ -62,6 +77,7 @@
 	<button
 		class="dropzone"
 		class:dragging
+		class:drop-flash={dropFlash}
 		ondrop={handleDrop}
 		ondragover={handleDragOver}
 		ondragleave={handleDragLeave}
@@ -106,7 +122,7 @@
 	{#if files.length > 0}
 		<div class="file-list">
 			{#each files as file, i}
-				<div class="file-item">
+				<div class="file-item" data-index={i} style="animation-delay: {i * 0.06}s">
 					<span class="file-icon"
 						>{file.name.endsWith(".pdf") ? "📄" : "📊"}</span
 					>
@@ -177,6 +193,11 @@
 		color: var(--color-text);
 	}
 
+	.dropzone.drop-flash {
+		border-color: var(--color-success);
+		box-shadow: var(--shadow-inset), 0 0 20px rgba(34, 197, 94, 0.15);
+	}
+
 	.dropzone-icon {
 		margin-bottom: 1rem;
 		opacity: 0.6;
@@ -214,7 +235,12 @@
 		background: var(--color-surface);
 		border-radius: var(--radius-sm);
 		border: 1px solid var(--color-border);
-		animation: fadeInUp 0.3s ease both;
+		animation: fileSlideIn 0.3s cubic-bezier(0.2, 0, 0, 1) both;
+		transition: border-color 0.2s ease, box-shadow 0.2s ease;
+	}
+
+	.file-item:hover {
+		border-color: rgba(192, 198, 204, 0.3);
 	}
 
 	.file-icon {
@@ -241,10 +267,22 @@
 		font-size: 1.25rem;
 		padding: 0 0.25rem;
 		line-height: 1;
+		transition: color 0.15s ease, transform 0.15s ease;
 	}
 
 	.file-remove:hover {
 		color: var(--color-danger);
+		transform: scale(1.2);
+	}
+
+	@keyframes fileSlideIn {
+		from { opacity: 0; transform: translateX(-12px); }
+		to { opacity: 1; transform: translateX(0); }
+	}
+
+	@keyframes fileSlideOut {
+		from { opacity: 1; transform: translateX(0); max-height: 60px; }
+		to { opacity: 0; transform: translateX(12px); max-height: 0; padding: 0 1rem; margin: 0; }
 	}
 
 	.language-row {

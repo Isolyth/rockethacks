@@ -17,6 +17,29 @@
 	let heatmapMonthIndex = $state(0);
 	let hoveredSegment = $state<number | null>(null);
 
+	// Animated number counters
+	let animatedIncome = $state(0);
+	let animatedExpenses = $state(0);
+	let animatedSavings = $state(0);
+
+	function animateValue(target: number, setter: (v: number) => void, duration = 1200) {
+		const start = performance.now();
+		const ease = (t: number) => 1 - Math.pow(1 - t, 3); // ease-out cubic
+		function tick(now: number) {
+			const elapsed = now - start;
+			const progress = Math.min(elapsed / duration, 1);
+			setter(target * ease(progress));
+			if (progress < 1) requestAnimationFrame(tick);
+		}
+		requestAnimationFrame(tick);
+	}
+
+	$effect(() => {
+		animateValue(report.summary.total_income, (v) => (animatedIncome = v));
+		animateValue(report.summary.total_expenses, (v) => (animatedExpenses = v));
+		animateValue(report.summary.net_savings, (v) => (animatedSavings = v));
+	});
+
 	function formatCurrency(n: number): string {
 		return new Intl.NumberFormat("en-US", {
 			style: "currency",
@@ -174,13 +197,13 @@
 		<div class="card income">
 			<span class="card-label">Income</span>
 			<span class="card-value"
-				>{formatCurrency(report.summary.total_income)}</span
+				>{formatCurrency(animatedIncome)}</span
 			>
 		</div>
 		<div class="card expenses">
 			<span class="card-label">Expenses</span>
 			<span class="card-value"
-				>{formatCurrency(report.summary.total_expenses)}</span
+				>{formatCurrency(animatedExpenses)}</span
 			>
 		</div>
 		<div
@@ -189,7 +212,7 @@
 		>
 			<span class="card-label">Net Savings</span>
 			<span class="card-value"
-				>{formatCurrency(report.summary.net_savings)}</span
+				>{formatCurrency(animatedSavings)}</span
 			>
 		</div>
 	</div>

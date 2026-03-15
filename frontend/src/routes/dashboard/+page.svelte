@@ -8,6 +8,7 @@
 	let statements = $state<StatementItem[]>([]);
 	let loading = $state(true);
 	let activeTab = $state<'reports' | 'statements'>('reports');
+	let tabKey = $state(0);
 	let dataLoaded = false;
 
 	$effect(() => {
@@ -89,14 +90,14 @@
 			<button
 				class="tab"
 				class:active={activeTab === 'reports'}
-				onclick={() => (activeTab = 'reports')}
+				onclick={() => { activeTab = 'reports'; tabKey++; }}
 			>
 				Reports ({reports.length})
 			</button>
 			<button
 				class="tab"
 				class:active={activeTab === 'statements'}
-				onclick={() => (activeTab = 'statements')}
+				onclick={() => { activeTab = 'statements'; tabKey++; }}
 			>
 				Statements ({statements.length})
 			</button>
@@ -105,6 +106,8 @@
 		{#if loading}
 			<p class="loading">Loading...</p>
 		{:else if activeTab === 'reports'}
+			{#key tabKey}
+			<div class="tab-content">
 			{#if reports.length === 0}
 				<div class="empty">
 					<p>No reports yet.</p>
@@ -112,8 +115,8 @@
 				</div>
 			{:else}
 				<div class="card-grid">
-					{#each reports as report (report.id)}
-						<div class="card">
+					{#each reports as report, idx (report.id)}
+						<div class="card" style="animation-delay: {idx * 0.05}s">
 							<div class="card-header">
 								<h3>{report.title}</h3>
 								<span class="card-date">{formatDate(report.created_at)}</span>
@@ -142,15 +145,19 @@
 					{/each}
 				</div>
 			{/if}
+			</div>
+			{/key}
 		{:else}
+			{#key tabKey}
+			<div class="tab-content">
 			{#if statements.length === 0}
 				<div class="empty">
 					<p>No saved statements yet. Upload statements during analysis to save them.</p>
 				</div>
 			{:else}
 				<div class="card-grid">
-					{#each statements as stmt (stmt.id)}
-						<div class="card card-compact">
+					{#each statements as stmt, idx (stmt.id)}
+						<div class="card card-compact" style="animation-delay: {idx * 0.05}s">
 							<div class="card-header">
 								<h3>{stmt.filename}</h3>
 								<span class="card-date">{formatDate(stmt.uploaded_at)}</span>
@@ -166,6 +173,8 @@
 					{/each}
 				</div>
 			{/if}
+			</div>
+			{/key}
 		{/if}
 	</div>
 </main>
@@ -252,7 +261,8 @@
 		border-bottom: 2px solid transparent;
 		font-size: 0.9rem;
 		cursor: pointer;
-		transition: all 0.2s;
+		transition: color 0.25s ease, border-color 0.25s ease, background 0.2s ease;
+		position: relative;
 	}
 
 	.tab.active {
@@ -262,6 +272,16 @@
 
 	.tab:hover:not(.active) {
 		color: var(--color-text);
+		background: rgba(255, 255, 255, 0.03);
+	}
+
+	.tab-content {
+		animation: tabFadeIn 0.35s ease both;
+	}
+
+	@keyframes tabFadeIn {
+		from { opacity: 0; transform: translateY(8px); }
+		to { opacity: 1; transform: translateY(0); }
 	}
 
 	.loading {
@@ -296,19 +316,13 @@
 		gap: 0.75rem;
 		box-shadow: var(--shadow-inset);
 		animation: fadeInUp 0.4s ease both;
-		transition: transform 0.25s ease, border-color 0.25s ease;
+		transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1), border-color 0.25s ease, box-shadow 0.3s ease;
 	}
 
-	.card:nth-child(1) { animation-delay: 0.05s; }
-	.card:nth-child(2) { animation-delay: 0.1s; }
-	.card:nth-child(3) { animation-delay: 0.15s; }
-	.card:nth-child(4) { animation-delay: 0.2s; }
-	.card:nth-child(5) { animation-delay: 0.25s; }
-	.card:nth-child(6) { animation-delay: 0.3s; }
-
 	.card:hover {
-		transform: translateY(-2px);
+		transform: translateY(-4px);
 		border-color: var(--color-accent);
+		box-shadow: var(--shadow-inset), 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(213, 166, 41, 0.1);
 	}
 
 	.card-header {
