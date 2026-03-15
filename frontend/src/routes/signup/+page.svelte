@@ -30,6 +30,7 @@
 </svelte:head>
 
 <main>
+	<p class="demo-banner">This is a hackathon demo project — not a real financial service. Do not enter real credentials.</p>
 	<div class="auth-card">
 		<h1>Sign Up</h1>
 		<form onsubmit={handleSubmit}>
@@ -69,6 +70,19 @@
 		align-items: center;
 		justify-content: center;
 		padding: 2rem;
+	}
+
+	.demo-banner {
+		font-size: 0.8rem;
+		color: var(--color-warning);
+		background: rgba(245, 158, 11, 0.1);
+		border: 1px solid rgba(245, 158, 11, 0.3);
+		border-radius: var(--radius);
+		padding: 0.5rem 1rem;
+		text-align: center;
+		max-width: 420px;
+		width: 100%;
+		margin-bottom: 0.75rem;
 	}
 
 	.auth-card {
