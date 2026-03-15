@@ -40,6 +40,7 @@
 					<span class="user-name">{auth.user?.display_name}</span>
 					<button class="nav-btn" onclick={handleLogout}>Log Out</button>
 				{:else}
+					<a href="/analyze" class="nav-link">Try as Guest</a>
 					<a href="/login" class="nav-link">Log In</a>
 					<a href="/signup" class="nav-link signup-link">Sign Up</a>
 				{/if}

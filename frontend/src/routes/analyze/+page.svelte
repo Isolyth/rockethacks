@@ -52,11 +52,7 @@
 		{ code: 'ru', name: 'Russian' }
 	];
 
-	$effect(() => {
-		if (!auth.loading && !isAuthenticated()) {
-			goto('/login');
-		}
-	});
+	let isGuest = $derived(!auth.loading && !isAuthenticated());
 
 	function startWithSavedOnly() {
 		handleUpload([], selectedLanguage);
@@ -172,7 +168,9 @@
 
 		{#if appState === 'idle'}
 			<h1>New Analysis</h1>
-			<SavedStatements bind:selected={selectedStatements} />
+			{#if !isGuest}
+				<SavedStatements bind:selected={selectedStatements} />
+			{/if}
 
 			{#if selectedStatements.length > 0}
 				<div class="saved-actions">

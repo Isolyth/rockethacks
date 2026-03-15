@@ -32,8 +32,8 @@
 				>
 				<button
 					class="ghost-btn"
-					onclick={() => goto("/login")}
-					type="button">Log In</button
+					onclick={() => goto("/analyze")}
+					type="button">Try as Guest</button
 				>
 			</div>
 		</div>

@@ -56,9 +56,11 @@
 	main {
 		min-height: 100vh;
 		display: flex;
+		flex-direction: column;
 		align-items: center;
 		justify-content: center;
 		padding: 2rem;
+		gap: 0.75rem;
 	}
 
 	.demo-banner {
@@ -71,7 +73,6 @@
 		text-align: center;
 		max-width: 420px;
 		width: 100%;
-		margin-bottom: 0.75rem;
 	}
 
 	.auth-card {
