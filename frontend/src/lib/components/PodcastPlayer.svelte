@@ -114,27 +114,25 @@
 <div class="podcast-player">
 	<h3>Podcast</h3>
 
-	<!-- Script text with highlighting -->
-	<div class="script-scroll" bind:this={scrollContainer}>
+	<!-- Lyrics-style script display -->
+	<div class="lyrics-scroll" bind:this={scrollContainer}>
 		{#if hasAudio && sentences.length > 0}
-			<div class="script-text">
-				{#each sentences as sentence, i}
-					<span
-						id="sentence-{i}"
-						class="sentence"
-						class:active={i === currentIndex}
-						class:past={i < currentIndex}
-						onclick={() => clickSentence(i)}
-						role="button"
-						tabindex="0"
-						onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), clickSentence(i))}
-					>
-						{sentence.text}{' '}
-					</span>
-				{/each}
-			</div>
+			<div class="lyrics-pad"></div>
+			{#each sentences as sentence, i}
+				<button
+					id="sentence-{i}"
+					class="lyric-line"
+					class:active={i === currentIndex}
+					class:past={i < currentIndex}
+					onclick={() => clickSentence(i)}
+					type="button"
+				>
+					{sentence.text}
+				</button>
+			{/each}
+			<div class="lyrics-pad"></div>
 		{:else}
-			<div class="script-text">
+			<div class="lyrics-fallback">
 				{#each paragraphs as paragraph}
 					<p>{paragraph}</p>
 				{/each}
@@ -215,47 +213,80 @@
 		font-size: 1.1rem;
 	}
 
-	/* ---- Scrollable script text ---- */
-	.script-scroll {
+	/* ---- Spotify-style lyrics ---- */
+	.lyrics-scroll {
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius);
-		padding: 1.5rem;
-		max-height: 350px;
+		padding: 1rem 1.5rem;
+		max-height: 420px;
 		overflow-y: auto;
 		scroll-behavior: smooth;
 		box-shadow: var(--shadow-inset);
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
 	}
 
-	.script-text {
+	.lyrics-pad {
+		min-height: 120px;
+		flex-shrink: 0;
+	}
+
+	.lyric-line {
+		display: block;
+		width: 100%;
+		text-align: left;
+		background: none;
+		border: none;
+		padding: 0.4rem 0.5rem;
+		border-radius: 6px;
+		font-size: 1.15rem;
+		font-weight: 600;
+		line-height: 1.5;
+		color: rgba(255, 255, 255, 0.25);
+		cursor: pointer;
+		transition: color 0.35s ease, transform 0.35s ease, opacity 0.35s ease;
+		font-family: inherit;
+	}
+
+	.lyric-line:hover {
+		color: rgba(255, 255, 255, 0.5);
+	}
+
+	.lyric-line.active {
+		color: #fff;
+		font-size: 1.2rem;
+		transform: scale(1.02);
+	}
+
+	.lyric-line.past {
+		color: rgba(255, 255, 255, 0.35);
+	}
+
+	.lyrics-fallback {
 		font-size: 0.925rem;
 		line-height: 1.8;
 		color: var(--color-text-muted);
+		padding: 0.5rem 0;
 	}
 
-	.script-text p {
+	.lyrics-fallback p {
 		margin-bottom: 1rem;
 	}
 
-	/* Sentence highlighting */
-	.sentence {
-		transition: color 0.2s, background 0.2s;
+	/* Scrollbar */
+	.lyrics-scroll::-webkit-scrollbar {
+		width: 6px;
+	}
+
+	.lyrics-scroll::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	.lyrics-scroll::-webkit-scrollbar-thumb {
+		background: var(--color-border);
 		border-radius: 3px;
-		padding: 1px 0;
-		cursor: pointer;
-	}
-
-	.sentence:hover {
-		color: var(--color-text);
-	}
-
-	.sentence.active {
-		color: #fff;
-		background: rgba(213, 166, 41, 0.15);
-	}
-
-	.sentence.past {
-		color: var(--color-text);
 	}
 
 	/* ---- Player controls ---- */
@@ -376,17 +407,4 @@
 		font-size: 0.85rem;
 	}
 
-	/* Scrollbar styling */
-	.script-scroll::-webkit-scrollbar {
-		width: 6px;
-	}
-
-	.script-scroll::-webkit-scrollbar-track {
-		background: transparent;
-	}
-
-	.script-scroll::-webkit-scrollbar-thumb {
-		background: var(--color-border);
-		border-radius: 3px;
-	}
 </style>

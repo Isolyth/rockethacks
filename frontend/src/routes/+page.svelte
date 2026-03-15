@@ -224,7 +224,7 @@
 	.primary-btn {
 		padding: 0.875rem 1.75rem;
 		background: var(--gradient-gold-btn);
-		color: #0a0a0f;
+		color: #5a3a0a;
 		border: 2px solid var(--color-gold-border);
 		border-radius: var(--radius-pill);
 		font-size: 1rem;
@@ -440,7 +440,7 @@
 		border-radius: 50%;
 		background: var(--gradient-gold-btn);
 		border: 2px solid var(--color-gold-border);
-		color: #0a0a0f;
+		color: #5a3a0a;
 		display: flex;
 		align-items: center;
 		justify-content: center;
