@@ -154,6 +154,7 @@
 		gap: 1.5rem;
 		width: 100%;
 		max-width: 560px;
+		animation: fadeInUp 0.5s ease both;
 	}
 
 	.dropzone {
@@ -213,6 +214,7 @@
 		background: var(--color-surface);
 		border-radius: var(--radius-sm);
 		border: 1px solid var(--color-border);
+		animation: fadeInUp 0.3s ease both;
 	}
 
 	.file-icon {
@@ -286,10 +288,34 @@
 		font-weight: 600;
 		transition: filter 0.2s;
 		box-shadow: var(--gold-btn-shadow);
+		position: relative;
+		overflow: hidden;
+	}
+
+	.analyze-btn::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: -100%;
+		width: 100%;
+		height: 100%;
+		background: linear-gradient(
+			120deg,
+			transparent 0%,
+			transparent 30%,
+			rgba(255, 255, 255, 0.35) 50%,
+			transparent 70%,
+			transparent 100%
+		);
+		transition: none;
 	}
 
 	.analyze-btn:hover {
-		filter: brightness(1.15);
+		filter: brightness(1.1);
+	}
+
+	.analyze-btn:hover::before {
+		animation: goldShimmer 0.6s ease forwards;
 	}
 
 	.file-warning {

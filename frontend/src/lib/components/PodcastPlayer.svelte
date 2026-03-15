@@ -208,6 +208,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
+		animation: fadeInUp 0.5s ease both;
 	}
 
 	h3 {
@@ -280,12 +281,37 @@
 		align-items: center;
 		justify-content: center;
 		flex-shrink: 0;
-		transition: filter 0.2s;
+		transition: filter 0.2s, transform 0.2s;
 		box-shadow: var(--gold-btn-shadow);
+		position: relative;
+		overflow: hidden;
+	}
+
+	.play-btn::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: -100%;
+		width: 100%;
+		height: 100%;
+		background: linear-gradient(
+			120deg,
+			transparent 0%,
+			transparent 25%,
+			rgba(255, 255, 255, 0.4) 50%,
+			transparent 75%,
+			transparent 100%
+		);
+		transition: none;
 	}
 
 	.play-btn:hover {
-		filter: brightness(1.15);
+		filter: brightness(1.1);
+		transform: scale(1.05);
+	}
+
+	.play-btn:hover::before {
+		animation: goldShimmer 0.6s ease forwards;
 	}
 
 	.time {

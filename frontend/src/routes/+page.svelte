@@ -16,7 +16,7 @@
 <main>
 	<!-- Hero -->
 	<section class="hero">
-		<div class="hero-inner">
+		<div class="hero-left">
 			<img src="/logo.svg" alt="Easy MonAI" class="hero-logo" />
 			<h1>Your financial life, analyzed and narrated by AI</h1>
 			<p class="hero-sub">
@@ -37,55 +37,67 @@
 				>
 			</div>
 		</div>
-	</section>
+		<div class="hero-right">
+			<div class="process-graphic">
+				<!-- Step 1: Upload -->
+				<div class="process-step">
+					<div class="process-icon">
+						<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+							<polyline points="14 2 14 8 20 8" />
+							<line x1="12" y1="18" x2="12" y2="12" />
+							<polyline points="9 15 12 12 15 15" />
+						</svg>
+					</div>
+					<span class="process-label">Upload</span>
+					<span class="process-detail">PDF / CSV</span>
+				</div>
 
-	<!-- Features -->
-	<section class="features">
-		<h2>What you get</h2>
-		<div class="feature-grid">
-			<div class="feature-card">
-				<div class="feature-icon">
-					<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-						<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-						<polyline points="14 2 14 8 20 8" />
-						<line x1="16" y1="13" x2="8" y2="13" />
-						<line x1="16" y1="17" x2="8" y2="17" />
-						<polyline points="10 9 9 9 8 9" />
+				<!-- Connector -->
+				<div class="process-connector">
+					<div class="connector-line"></div>
+					<svg class="connector-arrow" width="12" height="12" viewBox="0 0 12 12" fill="none">
+						<path d="M2 6h8M7 3l3 3-3 3" stroke="var(--color-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 					</svg>
 				</div>
-				<h3>Smart Parsing</h3>
-				<p>Upload PDF or CSV bank statements. Our AI reads and categorizes every transaction automatically.</p>
-			</div>
-			<div class="feature-card">
-				<div class="feature-icon">
-					<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-						<line x1="18" y1="20" x2="18" y2="10" />
-						<line x1="12" y1="20" x2="12" y2="4" />
-						<line x1="6" y1="20" x2="6" y2="14" />
+
+				<!-- Step 2: Analyze -->
+				<div class="process-step process-step-center">
+					<div class="process-icon process-icon-accent">
+						<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<circle cx="12" cy="12" r="10" />
+							<path d="M12 6v6l4 2" />
+						</svg>
+					</div>
+					<span class="process-label">AI Analyzes</span>
+					<div class="process-mini-report">
+						<div class="mini-bar" style="width: 85%"></div>
+						<div class="mini-bar" style="width: 60%"></div>
+						<div class="mini-bar" style="width: 40%"></div>
+						<div class="mini-bar" style="width: 72%"></div>
+					</div>
+				</div>
+
+				<!-- Connector -->
+				<div class="process-connector">
+					<div class="connector-line"></div>
+					<svg class="connector-arrow" width="12" height="12" viewBox="0 0 12 12" fill="none">
+						<path d="M2 6h8M7 3l3 3-3 3" stroke="var(--color-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 					</svg>
 				</div>
-				<h3>Detailed Reports</h3>
-				<p>Get income vs. expenses, category breakdowns, top merchants, and actionable financial insights.</p>
-			</div>
-			<div class="feature-card">
-				<div class="feature-icon">
-					<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-						<path d="M9 18V5l12-2v13" />
-						<circle cx="6" cy="18" r="3" />
-						<circle cx="18" cy="16" r="3" />
-					</svg>
+
+				<!-- Step 3: Results -->
+				<div class="process-step">
+					<div class="process-icon">
+						<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path d="M9 18V5l12-2v13" />
+							<circle cx="6" cy="18" r="3" />
+							<circle cx="18" cy="16" r="3" />
+						</svg>
+					</div>
+					<span class="process-label">Report & Podcast</span>
+					<span class="process-detail">Insights + Audio</span>
 				</div>
-				<h3>AI Podcast</h3>
-				<p>Listen to a personalized narration of your finances, complete with highlights and recommendations.</p>
-			</div>
-			<div class="feature-card">
-				<div class="feature-icon">
-					<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-						<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-					</svg>
-				</div>
-				<h3>Advisor Chat</h3>
-				<p>Ask follow-up "what-if" questions and get AI-powered financial advice based on your data.</p>
 			</div>
 		</div>
 	</section>
@@ -93,33 +105,26 @@
 	<!-- How it works -->
 	<section class="how-it-works">
 		<h2>How it works</h2>
-		<div class="steps">
-			<div class="step">
+		<div class="steps-grid">
+			<div class="step-card">
 				<span class="step-number">1</span>
-				<h3>Upload</h3>
-				<p>Drop in your bank statement PDFs or CSVs</p>
+				<h3>Upload your statements</h3>
+				<p>Drag and drop your bank statement PDFs or CSVs. Our parser handles major banks and formats automatically — no manual formatting needed.</p>
 			</div>
-			<div class="step-arrow">
-				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<line x1="5" y1="12" x2="19" y2="12" />
-					<polyline points="12 5 19 12 12 19" />
-				</svg>
-			</div>
-			<div class="step">
+			<div class="step-card">
 				<span class="step-number">2</span>
-				<h3>Analyze</h3>
-				<p>AI parses, categorizes, and generates your report</p>
+				<h3>AI-powered analysis</h3>
+				<p>Our Gemini-powered agent reads every transaction, categorizes spending, identifies trends, and may ask clarifying questions to give you the most accurate report.</p>
 			</div>
-			<div class="step-arrow">
-				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<line x1="5" y1="12" x2="19" y2="12" />
-					<polyline points="12 5 19 12 12 19" />
-				</svg>
-			</div>
-			<div class="step">
+			<div class="step-card">
 				<span class="step-number">3</span>
-				<h3>Listen & Explore</h3>
-				<p>Get your podcast, review insights, and chat with your advisor</p>
+				<h3>Get your report & podcast</h3>
+				<p>Receive a detailed financial breakdown with income vs. expenses, top merchants, and actionable insights — plus an AI-narrated podcast you can listen to on the go.</p>
+			</div>
+			<div class="step-card">
+				<span class="step-number">4</span>
+				<h3>Chat with your advisor</h3>
+				<p>Ask follow-up questions like "What if I cut dining out by 50%?" and get personalized advice based on your actual financial data.</p>
 			</div>
 		</div>
 	</section>
@@ -157,46 +162,63 @@
 
 	/* Hero */
 	.hero {
-		padding: 5rem 1.5rem 4rem;
-		text-align: center;
+		padding: 5rem 2rem 4rem;
 		display: flex;
+		align-items: center;
 		justify-content: center;
+		gap: 4rem;
+		max-width: 1200px;
+		margin: 0 auto;
+		width: 100%;
+		animation: fadeIn 0.6s ease;
 	}
 
-	.hero-inner {
-		max-width: 680px;
+	.hero-left {
+		flex: 1;
 		display: flex;
 		flex-direction: column;
-		align-items: center;
 		gap: 1.5rem;
+		max-width: 520px;
+	}
+
+	.hero-right {
+		flex: 1;
+		display: flex;
+		justify-content: center;
+		max-width: 520px;
+		animation: fadeInUp 0.6s ease 0.3s both;
 	}
 
 	.hero-logo {
-		height: 90px;
+		height: 70px;
 		width: auto;
+		align-self: flex-start;
+		animation: fadeInUp 0.5s ease both;
 	}
 
 	h1 {
-		font-size: 2.25rem;
+		font-size: 2.5rem;
 		font-weight: 700;
-		line-height: 1.15;
+		line-height: 1.12;
 		background: var(--gradient-gold);
 		-webkit-background-clip: text;
 		-webkit-text-fill-color: transparent;
 		background-clip: text;
+		animation: fadeInUp 0.5s ease 0.1s both;
 	}
 
 	.hero-sub {
-		font-size: 1.1rem;
+		font-size: 1.05rem;
 		color: var(--color-text-muted);
 		line-height: 1.6;
-		max-width: 540px;
+		animation: fadeInUp 0.5s ease 0.2s both;
 	}
 
 	.hero-actions {
 		display: flex;
 		gap: 1rem;
 		margin-top: 0.5rem;
+		animation: fadeInUp 0.5s ease 0.3s both;
 	}
 
 	.primary-btn {
@@ -210,10 +232,34 @@
 		cursor: pointer;
 		transition: filter 0.2s;
 		box-shadow: var(--gold-btn-shadow);
+		position: relative;
+		overflow: hidden;
+	}
+
+	.primary-btn::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: -100%;
+		width: 100%;
+		height: 100%;
+		background: linear-gradient(
+			120deg,
+			transparent 0%,
+			transparent 30%,
+			rgba(255, 255, 255, 0.35) 50%,
+			transparent 70%,
+			transparent 100%
+		);
+		transition: none;
 	}
 
 	.primary-btn:hover {
-		filter: brightness(1.15);
+		filter: brightness(1.1);
+	}
+
+	.primary-btn:hover::before {
+		animation: goldShimmer 0.6s ease forwards;
 	}
 
 	.ghost-btn {
@@ -225,91 +271,172 @@
 		font-size: 1rem;
 		font-weight: 600;
 		cursor: pointer;
-		transition: all 0.2s;
+		transition: all 0.25s ease;
 	}
 
 	.ghost-btn:hover {
 		background: var(--color-surface-2);
 		border-color: var(--color-accent);
+		transform: translateY(-1px);
 	}
 
-	/* Features */
-	.features {
-		padding: 4rem 1.5rem;
-		max-width: 1000px;
+	/* Process Graphic */
+	.process-graphic {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: 12px;
+		padding: 2rem 1.5rem;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.75rem;
+		box-shadow: var(--shadow-inset);
+		width: 100%;
+		max-width: 280px;
+	}
+
+	.process-step {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.4rem;
+		width: 100%;
+		animation: fadeInUp 0.4s ease both;
+	}
+
+	.process-step:nth-child(1) { animation-delay: 0.4s; }
+	.process-step:nth-child(3) { animation-delay: 0.6s; }
+	.process-step:nth-child(5) { animation-delay: 0.8s; }
+
+	.process-connector {
+		animation: fadeIn 0.3s ease both;
+	}
+
+	.process-connector:nth-child(2) { animation-delay: 0.5s; }
+	.process-connector:nth-child(4) { animation-delay: 0.7s; }
+
+	.process-icon {
+		width: 52px;
+		height: 52px;
+		border-radius: 12px;
+		background: rgba(213, 166, 41, 0.08);
+		border: 1px solid rgba(213, 166, 41, 0.2);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--color-accent);
+		transition: transform 0.25s ease, border-color 0.25s ease;
+	}
+
+	.process-step:hover .process-icon {
+		transform: scale(1.08);
+		border-color: var(--color-accent);
+	}
+
+	.process-icon-accent {
+		background: rgba(213, 166, 41, 0.15);
+		border-color: rgba(213, 166, 41, 0.35);
+	}
+
+	.process-label {
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
+	.process-detail {
+		font-size: 0.72rem;
+		color: var(--color-text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.process-connector {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0;
+		height: 32px;
+	}
+
+	.connector-line {
+		width: 1px;
+		flex: 1;
+		background: linear-gradient(180deg, rgba(213, 166, 41, 0.15), rgba(213, 166, 41, 0.4));
+	}
+
+	.connector-arrow {
+		transform: rotate(90deg);
+		flex-shrink: 0;
+	}
+
+	/* Mini report bars */
+	.process-mini-report {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		width: 100%;
+		max-width: 140px;
+		padding-top: 0.25rem;
+	}
+
+	.mini-bar {
+		height: 4px;
+		border-radius: 2px;
+		background: linear-gradient(90deg, var(--color-accent), var(--color-accent-light));
+		opacity: 0.5;
+	}
+
+	/* How it works */
+	.how-it-works {
+		padding: 5rem 2rem;
+		max-width: 1100px;
 		margin: 0 auto;
 		width: 100%;
+		animation: fadeIn 0.5s ease 0.4s both;
 	}
 
-	.features h2,
 	.how-it-works h2,
 	.languages-section h2,
 	.cta h2 {
 		text-align: center;
 		font-size: 1.5rem;
 		font-weight: 700;
-		margin-bottom: 2rem;
+		margin-bottom: 2.5rem;
 	}
 
-	.feature-grid {
+	.steps-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+		grid-template-columns: repeat(2, 1fr);
 		gap: 1.5rem;
 	}
 
-	.feature-card {
+	.step-card {
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius);
-		padding: 1.5rem;
+		border-radius: 8px;
+		padding: 1.75rem;
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
 		box-shadow: var(--shadow-inset);
+		animation: fadeInUp 0.5s ease both;
+		transition: transform 0.25s ease, border-color 0.25s ease;
 	}
 
-	.feature-icon {
-		color: var(--color-accent);
-	}
+	.step-card:nth-child(1) { animation-delay: 0.5s; }
+	.step-card:nth-child(2) { animation-delay: 0.6s; }
+	.step-card:nth-child(3) { animation-delay: 0.7s; }
+	.step-card:nth-child(4) { animation-delay: 0.8s; }
 
-	.feature-card h3 {
-		font-size: 1.05rem;
-		font-weight: 600;
-	}
-
-	.feature-card p {
-		font-size: 0.9rem;
-		color: var(--color-text-muted);
-		line-height: 1.5;
-	}
-
-	/* How it works */
-	.how-it-works {
-		padding: 4rem 1.5rem;
-		max-width: 800px;
-		margin: 0 auto;
-		width: 100%;
-	}
-
-	.steps {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 1.5rem;
-	}
-
-	.step {
-		text-align: center;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.5rem;
-		flex: 1;
+	.step-card:hover {
+		transform: translateY(-3px);
+		border-color: var(--color-accent);
 	}
 
 	.step-number {
-		width: 40px;
-		height: 40px;
+		width: 36px;
+		height: 36px;
 		border-radius: 50%;
 		background: var(--gradient-gold-btn);
 		border: 2px solid var(--color-gold-border);
@@ -318,31 +445,32 @@
 		align-items: center;
 		justify-content: center;
 		font-weight: 700;
-		font-size: 1.1rem;
+		font-size: 1rem;
 		box-shadow: var(--gold-btn-shadow);
+		flex-shrink: 0;
+		transition: transform 0.25s ease;
 	}
 
-	.step h3 {
-		font-size: 1rem;
+	.step-card:hover .step-number {
+		transform: scale(1.1);
+	}
+
+	.step-card h3 {
+		font-size: 1.05rem;
 		font-weight: 600;
 	}
 
-	.step p {
-		font-size: 0.85rem;
+	.step-card p {
+		font-size: 0.9rem;
 		color: var(--color-text-muted);
-		line-height: 1.4;
-	}
-
-	.step-arrow {
-		color: var(--color-text-muted);
-		flex-shrink: 0;
-		margin-top: -2rem;
+		line-height: 1.55;
 	}
 
 	/* Languages */
 	.languages-section {
 		padding: 3rem 1.5rem;
 		text-align: center;
+		animation: fadeIn 0.5s ease 0.6s both;
 	}
 
 	.languages-sub {
@@ -361,6 +489,7 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 1rem;
+		animation: fadeInUp 0.5s ease 0.7s both;
 	}
 
 	.cta p {
@@ -375,6 +504,7 @@
 		padding: 2rem 1.5rem;
 		border-top: 1px solid var(--color-border);
 		margin-top: auto;
+		animation: fadeIn 0.4s ease 0.8s both;
 	}
 
 	.landing-footer p {
@@ -383,9 +513,31 @@
 	}
 
 	/* Responsive */
-	@media (max-width: 600px) {
+	@media (max-width: 900px) {
+		.hero {
+			flex-direction: column;
+			text-align: center;
+			gap: 2.5rem;
+			padding: 3rem 1.5rem;
+		}
+
+		.hero-left {
+			align-items: center;
+			max-width: 600px;
+		}
+
+		.hero-logo {
+			align-self: center;
+		}
+
+		.hero-sub {
+			max-width: 500px;
+		}
+	}
+
+	@media (max-width: 640px) {
 		h1 {
-			font-size: 1.65rem;
+			font-size: 1.75rem;
 		}
 
 		.hero-actions {
@@ -397,13 +549,8 @@
 			width: 100%;
 		}
 
-		.steps {
-			flex-direction: column;
-		}
-
-		.step-arrow {
-			transform: rotate(90deg);
-			margin-top: 0;
+		.steps-grid {
+			grid-template-columns: 1fr;
 		}
 	}
 </style>

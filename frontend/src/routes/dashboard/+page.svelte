@@ -179,6 +179,7 @@
 	.dashboard {
 		max-width: 1000px;
 		margin: 0 auto;
+		animation: fadeIn 0.4s ease;
 	}
 
 	.dashboard-header {
@@ -186,6 +187,7 @@
 		justify-content: space-between;
 		align-items: center;
 		margin-bottom: 1.5rem;
+		animation: fadeInUp 0.4s ease both;
 	}
 
 	h1 {
@@ -205,10 +207,34 @@
 		cursor: pointer;
 		transition: filter 0.2s;
 		box-shadow: var(--gold-btn-shadow);
+		position: relative;
+		overflow: hidden;
+	}
+
+	.primary-btn::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: -100%;
+		width: 100%;
+		height: 100%;
+		background: linear-gradient(
+			120deg,
+			transparent 0%,
+			transparent 30%,
+			rgba(255, 255, 255, 0.35) 50%,
+			transparent 70%,
+			transparent 100%
+		);
+		transition: none;
 	}
 
 	.primary-btn:hover {
-		filter: brightness(1.15);
+		filter: brightness(1.1);
+	}
+
+	.primary-btn:hover::before {
+		animation: goldShimmer 0.6s ease forwards;
 	}
 
 	.tabs {
@@ -269,6 +295,20 @@
 		flex-direction: column;
 		gap: 0.75rem;
 		box-shadow: var(--shadow-inset);
+		animation: fadeInUp 0.4s ease both;
+		transition: transform 0.25s ease, border-color 0.25s ease;
+	}
+
+	.card:nth-child(1) { animation-delay: 0.05s; }
+	.card:nth-child(2) { animation-delay: 0.1s; }
+	.card:nth-child(3) { animation-delay: 0.15s; }
+	.card:nth-child(4) { animation-delay: 0.2s; }
+	.card:nth-child(5) { animation-delay: 0.25s; }
+	.card:nth-child(6) { animation-delay: 0.3s; }
+
+	.card:hover {
+		transform: translateY(-2px);
+		border-color: var(--color-accent);
 	}
 
 	.card-header {

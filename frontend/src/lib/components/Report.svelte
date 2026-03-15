@@ -147,6 +147,7 @@
 		border: 1px solid var(--color-border);
 		padding: 2rem;
 		box-shadow: var(--shadow-inset);
+		animation: fadeInUp 0.5s ease both;
 	}
 
 	h2 {
@@ -178,7 +179,12 @@
 		flex-direction: column;
 		gap: 0.5rem;
 		box-shadow: var(--shadow-inset);
+		animation: fadeInScale 0.4s ease both;
 	}
+
+	.card:nth-child(1) { animation-delay: 0.1s; }
+	.card:nth-child(2) { animation-delay: 0.2s; }
+	.card:nth-child(3) { animation-delay: 0.3s; }
 
 	.card-label {
 		font-size: 0.8rem;
@@ -286,6 +292,12 @@
 		background: var(--color-surface);
 		border-radius: var(--radius-sm);
 		border: 1px solid var(--color-border);
+		transition: border-color 0.2s ease, transform 0.2s ease;
+	}
+
+	.merchant-row:hover {
+		border-color: var(--color-accent);
+		transform: translateX(3px);
 	}
 
 	.merchant-name {
@@ -317,6 +329,12 @@
 		border-left: 3px solid var(--color-accent);
 		font-size: 0.9rem;
 		line-height: 1.5;
+		transition: transform 0.2s ease, background 0.2s ease;
+	}
+
+	.insights li:hover {
+		transform: translateX(3px);
+		background: var(--color-surface-2);
 	}
 
 	.sources {

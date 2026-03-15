@@ -267,6 +267,7 @@
 		align-items: center;
 		gap: 2rem;
 		width: 100%;
+		animation: fadeIn 0.4s ease;
 	}
 
 	h1 {
@@ -328,10 +329,34 @@
 		transition: filter 0.2s;
 		width: 100%;
 		box-shadow: var(--gold-btn-shadow);
+		position: relative;
+		overflow: hidden;
+	}
+
+	.primary-btn::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: -100%;
+		width: 100%;
+		height: 100%;
+		background: linear-gradient(
+			120deg,
+			transparent 0%,
+			transparent 30%,
+			rgba(255, 255, 255, 0.35) 50%,
+			transparent 70%,
+			transparent 100%
+		);
+		transition: none;
 	}
 
 	.primary-btn:hover {
-		filter: brightness(1.15);
+		filter: brightness(1.1);
+	}
+
+	.primary-btn:hover::before {
+		animation: goldShimmer 0.6s ease forwards;
 	}
 
 	.divider-text {
@@ -391,6 +416,7 @@
 		align-items: center;
 		gap: 1rem;
 		box-shadow: var(--shadow-inset);
+		animation: fadeInScale 0.4s ease both;
 	}
 
 	.error-icon {
@@ -428,10 +454,34 @@
 		cursor: pointer;
 		transition: filter 0.2s;
 		box-shadow: var(--gold-btn-shadow);
+		position: relative;
+		overflow: hidden;
+	}
+
+	.view-btn::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: -100%;
+		width: 100%;
+		height: 100%;
+		background: linear-gradient(
+			120deg,
+			transparent 0%,
+			transparent 30%,
+			rgba(255, 255, 255, 0.35) 50%,
+			transparent 70%,
+			transparent 100%
+		);
+		transition: none;
 	}
 
 	.view-btn:hover {
-		filter: brightness(1.15);
+		filter: brightness(1.1);
+	}
+
+	.view-btn:hover::before {
+		animation: goldShimmer 0.6s ease forwards;
 	}
 
 	.reset-btn {
@@ -456,6 +506,7 @@
 		width: 100%;
 		max-width: 1400px;
 		align-items: start;
+		animation: fadeIn 0.5s ease both;
 	}
 
 	.results-col {

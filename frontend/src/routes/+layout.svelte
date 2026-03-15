@@ -61,6 +61,7 @@
 		-webkit-backdrop-filter: blur(12px);
 		border-bottom: 1px solid var(--color-border);
 		z-index: 100;
+		animation: fadeIn 0.4s ease;
 	}
 
 	.header-content {
@@ -116,12 +117,36 @@
 		font-weight: 600;
 		border: 2px solid var(--color-gold-border);
 		box-shadow: var(--gold-btn-shadow);
+		position: relative;
+		overflow: hidden;
+	}
+
+	.signup-link::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: -100%;
+		width: 100%;
+		height: 100%;
+		background: linear-gradient(
+			120deg,
+			transparent 0%,
+			transparent 30%,
+			rgba(255, 255, 255, 0.35) 50%,
+			transparent 70%,
+			transparent 100%
+		);
+		transition: none;
 	}
 
 	.signup-link:hover {
-		filter: brightness(1.15);
+		filter: brightness(1.1);
 		background: var(--gradient-gold-btn);
 		color: #0a0a0f;
+	}
+
+	.signup-link:hover::before {
+		animation: goldShimmer 0.6s ease forwards;
 	}
 
 	.nav-btn {

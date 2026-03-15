@@ -109,6 +109,7 @@
 
 	.report-header {
 		margin-bottom: 2rem;
+		animation: fadeInUp 0.4s ease both;
 	}
 
 	.back-btn {
@@ -119,10 +120,12 @@
 		font-size: 0.875rem;
 		padding: 0;
 		margin-bottom: 0.75rem;
+		transition: color 0.2s, transform 0.2s;
 	}
 
 	.back-btn:hover {
 		color: var(--color-text);
+		transform: translateX(-3px);
 	}
 
 	h1 {
@@ -161,6 +164,7 @@
 		grid-template-columns: 1fr 1fr;
 		gap: 2.5rem;
 		align-items: start;
+		animation: fadeIn 0.5s ease 0.1s both;
 	}
 
 	.results-col {

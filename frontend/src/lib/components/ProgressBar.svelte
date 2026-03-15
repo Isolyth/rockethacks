@@ -53,6 +53,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1.5rem;
+		animation: fadeInScale 0.4s ease both;
 	}
 
 	.steps {

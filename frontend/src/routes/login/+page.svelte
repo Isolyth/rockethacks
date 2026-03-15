@@ -73,6 +73,7 @@
 		text-align: center;
 		max-width: 420px;
 		width: 100%;
+		animation: fadeIn 0.4s ease;
 	}
 
 	.auth-card {
@@ -83,6 +84,7 @@
 		width: 100%;
 		max-width: 420px;
 		box-shadow: var(--shadow-inset);
+		animation: fadeInUp 0.5s ease 0.1s both;
 	}
 
 	h1 {
@@ -137,13 +139,37 @@
 		font-size: 1rem;
 		font-weight: 600;
 		cursor: pointer;
-		transition: opacity 0.2s;
+		transition: filter 0.2s;
 		margin-top: 0.5rem;
 		box-shadow: var(--gold-btn-shadow);
+		position: relative;
+		overflow: hidden;
+	}
+
+	.submit-btn::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: -100%;
+		width: 100%;
+		height: 100%;
+		background: linear-gradient(
+			120deg,
+			transparent 0%,
+			transparent 30%,
+			rgba(255, 255, 255, 0.35) 50%,
+			transparent 70%,
+			transparent 100%
+		);
+		transition: none;
 	}
 
 	.submit-btn:hover:not(:disabled) {
-		filter: brightness(1.15);
+		filter: brightness(1.1);
+	}
+
+	.submit-btn:hover:not(:disabled)::before {
+		animation: goldShimmer 0.6s ease forwards;
 	}
 
 	.submit-btn:disabled {

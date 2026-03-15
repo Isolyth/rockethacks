@@ -74,6 +74,7 @@
 	.saved-statements {
 		width: 100%;
 		max-width: 600px;
+		animation: fadeIn 0.4s ease both;
 	}
 
 	h3 {

@@ -149,6 +149,7 @@
 		display: flex;
 		flex-direction: column;
 		box-shadow: var(--shadow-inset);
+		animation: fadeInUp 0.5s ease 0.2s both;
 	}
 
 	h3 {
@@ -178,6 +179,7 @@
 		border-radius: 12px;
 		line-height: 1.5;
 		font-size: 0.9rem;
+		animation: fadeInUp 0.3s ease both;
 	}
 
 	.chat-bubble.user {
@@ -298,10 +300,34 @@
 		transition: filter 0.2s;
 		font-size: 0.9rem;
 		box-shadow: var(--gold-btn-shadow);
+		position: relative;
+		overflow: hidden;
+	}
+
+	.send-btn::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: -100%;
+		width: 100%;
+		height: 100%;
+		background: linear-gradient(
+			120deg,
+			transparent 0%,
+			transparent 30%,
+			rgba(255, 255, 255, 0.35) 50%,
+			transparent 70%,
+			transparent 100%
+		);
+		transition: none;
 	}
 
 	.send-btn:hover:not(:disabled) {
-		filter: brightness(1.15);
+		filter: brightness(1.1);
+	}
+
+	.send-btn:hover:not(:disabled)::before {
+		animation: goldShimmer 0.6s ease forwards;
 	}
 
 	.send-btn:disabled {

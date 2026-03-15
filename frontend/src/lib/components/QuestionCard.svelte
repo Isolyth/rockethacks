@@ -129,6 +129,7 @@
 		border: 1px solid var(--color-accent);
 		border-radius: var(--radius);
 		box-shadow: var(--shadow-inset);
+		animation: fadeInUp 0.4s ease both;
 	}
 
 	.question-header {
@@ -274,10 +275,34 @@
 		font-weight: 600;
 		transition: filter 0.2s;
 		box-shadow: var(--gold-btn-shadow);
+		position: relative;
+		overflow: hidden;
+	}
+
+	.submit-btn::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: -100%;
+		width: 100%;
+		height: 100%;
+		background: linear-gradient(
+			120deg,
+			transparent 0%,
+			transparent 30%,
+			rgba(255, 255, 255, 0.35) 50%,
+			transparent 70%,
+			transparent 100%
+		);
+		transition: none;
 	}
 
 	.submit-btn:hover:not(:disabled) {
-		filter: brightness(1.15);
+		filter: brightness(1.1);
+	}
+
+	.submit-btn:hover:not(:disabled)::before {
+		animation: goldShimmer 0.6s ease forwards;
 	}
 
 	.submit-btn:disabled {

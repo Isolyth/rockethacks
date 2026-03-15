@@ -124,6 +124,7 @@
 		border: 1px solid var(--color-warning);
 		border-radius: var(--radius);
 		box-shadow: var(--shadow-inset);
+		animation: fadeInUp 0.4s ease both;
 	}
 
 	.request-header {
